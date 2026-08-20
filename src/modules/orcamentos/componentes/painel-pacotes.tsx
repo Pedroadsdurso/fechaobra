@@ -30,7 +30,7 @@ export function PainelPacotes({
   if (!ativo) {
     return (
       <section className="rounded-xl border border-dashed border-borda bg-superficie px-4 py-3">
-        <h2 className="text-sm font-medium text-tinta">Opções de contratação</h2>
+        <p className="text-sm font-medium text-tinta">Como funciona</p>
         <p className="mt-1 text-xs text-tinta-suave">
           Marque itens como Recomendado ou Completo e o orçamento passa a oferecer três opções lado
           a lado, cada uma com sua justificativa. Deixando tudo em Essencial, o documento imprime só
@@ -45,7 +45,6 @@ export function PainelPacotes({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-sm font-medium text-tinta">Opções de contratação</h2>
         <p className="mt-0.5 text-xs text-tinta-suave">
           O valor vem da soma dos itens de cada nível. Escreva o que o cliente ganha ao subir —
           quem conhece o cliente é você, e a sua frase vai funcionar melhor que a nossa.

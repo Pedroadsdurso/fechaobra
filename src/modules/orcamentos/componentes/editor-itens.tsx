@@ -218,7 +218,6 @@ export function EditorItens({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-tinta">Itens</h2>
         <button
           type="button"
           onClick={aoAbrirBiblioteca}

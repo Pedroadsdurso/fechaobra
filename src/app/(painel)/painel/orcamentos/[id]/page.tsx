@@ -24,15 +24,11 @@ export default async function PaginaOrcamento({ params }: { params: Promise<{ id
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <p className="text-xs font-medium text-tinta-suave">
-          Orçamento nº {String(carregado.rascunho.numero).padStart(3, '0')}
-        </p>
-        <h1 className="text-xl font-semibold tracking-tight text-tinta sm:text-2xl">
-          {carregado.rascunho.titulo || 'Novo orçamento'}
-        </h1>
-      </div>
-
+      {/*
+        Sem bloco de título aqui: a barra fixa do editor já mostra número e
+        status, e o título do orçamento é um campo da seção 1. Repetir os três
+        empurrava o primeiro campo para fora da primeira tela do celular.
+      */}
       <EditorOrcamento
         inicial={carregado.rascunho}
         clientes={clientes}

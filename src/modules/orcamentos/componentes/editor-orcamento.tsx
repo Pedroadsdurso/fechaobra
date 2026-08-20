@@ -24,14 +24,16 @@ import {
   pendenciasParaFinalizar,
   usaPacotes,
 } from '../calculos'
-import { TIPOS_SERVICO, VALIDADE_PADRAO_DIAS } from '../constantes'
+import { STATUS_ORCAMENTO, TIPOS_SERVICO, VALIDADE_PADRAO_DIAS } from '../constantes'
 import type { ItemBiblioteca, ItemEditor, Pacote, RascunhoOrcamento } from '../tipos'
 
 import { DialogoBiblioteca } from './dialogo-biblioteca'
 import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
+import { CabecalhoSecao } from './secao-editor'
 import { SeletorCliente } from './seletor-cliente'
+import { TextosDobrados } from './textos-dobrados'
 
 /**
  * O preview carrega o react-pdf inteiro: 449 KB gzip, 1,23 MB para o motor
@@ -120,6 +122,15 @@ export function EditorOrcamento({
   const [enviando, setEnviando] = useState(false)
   const ehDesktop = useEhDesktop()
 
+  /*
+    Os textos como o modelo entregou.
+
+    Serve só para o selo "Editado" nas linhas dobradas. Fica vazio quando o
+    orçamento é aberto depois, sem passar pela escolha do tipo de serviço —
+    e aí o selo simplesmente não aparece, em vez de mentir.
+  */
+  const [padroes, setPadroes] = useState<Record<string, string>>({})
+
   // Assinatura do que já está gravado. Sem isso o autosave dispararia a cada
   // render e reescreveria a tabela de itens à toa.
   const salvo = useRef(JSON.stringify(inicial))
@@ -163,6 +174,12 @@ export function EditorOrcamento({
 
     const textos = await buscarTextosPadrao(tipo)
     if (!textos) return
+    setPadroes({
+      textoEscopo: textos.escopo ?? '',
+      textoExclusoes: textos.exclusoes ?? '',
+      textoGarantia: textos.garantia ?? '',
+      textoCondicoesPagamento: textos.condicoes ?? '',
+    })
 
     const temTexto =
       rascunho.textoEscopo || rascunho.textoExclusoes || rascunho.textoGarantia || rascunho.textoCondicoesPagamento
@@ -300,11 +317,26 @@ export function EditorOrcamento({
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start lg:gap-6">
     <div className="flex flex-col gap-6">
-      <IndicadorSalvamento estado={salvamento} />
+      {/*
+        Sob o cabeçalho do app, não no lugar dele: a navegação continua onde
+        estava e o estado de salvamento fica sempre visível enquanto se digita.
+      */}
+      <div className="sticky top-14 z-20 -mx-4 -mt-5 flex min-h-[52px] items-center gap-2.5 border-b border-borda bg-superficie px-4 md:top-0 md:-mt-8">
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-tinta">
+          Orçamento nº {String(rascunho.numero).padStart(3, '0')}{' '}
+          <span className="font-normal text-tinta-meta">· {STATUS_ORCAMENTO.find((e) => e.valor === rascunho.status)?.rotulo ?? rascunho.status}</span>
+        </p>
+        <IndicadorSalvamento estado={salvamento} />
+      </div>
 
       {aviso && <Alerta tom="info">{aviso}</Alerta>}
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-3">
+        <CabecalhoSecao
+          numero={1}
+          titulo="Cliente e serviço"
+          selo={{ texto: 'Obrigatório', tom: 'obrigatorio' }}
+        />
         <SeletorCliente
           clientes={clientes}
           clienteId={rascunho.clienteId}
@@ -369,6 +401,14 @@ export function EditorOrcamento({
         />
       </section>
 
+      <section className="flex flex-col gap-3">
+        <CabecalhoSecao
+          numero={2}
+          titulo="Itens"
+          selo={{ texto: 'Obrigatório', tom: 'obrigatorio' }}
+        />
+      </section>
+
       <EditorItens
         itens={rascunho.itens}
         aoMudar={mudarItem}
@@ -378,6 +418,14 @@ export function EditorOrcamento({
         aoAbrirBiblioteca={() => setBibliotecaAberta(true)}
         aoGuardarNaBiblioteca={guardarNaBiblioteca}
       />
+
+      <section className="flex flex-col gap-3">
+        <CabecalhoSecao
+          numero={3}
+          titulo="Pacotes"
+          selo={{ texto: 'o valor vem dos itens', tom: 'discreto' }}
+        />
+      </section>
 
       <PainelPacotes
         itens={rascunho.itens}
@@ -393,7 +441,54 @@ export function EditorOrcamento({
         </Alerta>
       ))}
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-3">
+        <CabecalhoSecao
+          numero={4}
+          titulo="Textos do orçamento"
+          selo={{ texto: 'Vem pronto', tom: 'pronto' }}
+          nota="Vieram do modelo do tipo de serviço. Toque para ajustar — o documento usa o que estiver aqui."
+        />
+
+        <TextosDobrados
+          textos={[
+            {
+              chave: 'textoEscopo',
+              rotulo: 'O que está incluso',
+              valor: rascunho.textoEscopo,
+              padrao: padroes.textoEscopo,
+              aoMudar: (v) => alterar('textoEscopo', v),
+            },
+            {
+              chave: 'textoExclusoes',
+              rotulo: 'O que não está incluso',
+              valor: rascunho.textoExclusoes,
+              padrao: padroes.textoExclusoes,
+              aoMudar: (v) => alterar('textoExclusoes', v),
+            },
+            {
+              chave: 'textoGarantia',
+              rotulo: 'Garantia',
+              valor: rascunho.textoGarantia,
+              padrao: padroes.textoGarantia,
+              aoMudar: (v) => alterar('textoGarantia', v),
+            },
+            {
+              chave: 'textoCondicoesPagamento',
+              rotulo: 'Condições de pagamento',
+              valor: rascunho.textoCondicoesPagamento,
+              padrao: padroes.textoCondicoesPagamento,
+              aoMudar: (v) => alterar('textoCondicoesPagamento', v),
+            },
+            {
+              chave: 'observacoes',
+              rotulo: 'Observações',
+              valor: rascunho.observacoes,
+              linhas: 6,
+              aoMudar: (v) => alterar('observacoes', v),
+            },
+          ]}
+        />
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="validadeDias" className="text-sm font-medium text-tinta">
@@ -422,37 +517,6 @@ export function EditorOrcamento({
             placeholder="Ex.: 18 dias corridos"
           />
         </div>
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-medium text-tinta">Textos do orçamento</h2>
-
-        <AreaTexto
-          rotulo="O que está incluso"
-          valor={rascunho.textoEscopo}
-          aoMudar={(v) => alterar('textoEscopo', v)}
-        />
-        <AreaTexto
-          rotulo="O que não está incluso"
-          valor={rascunho.textoExclusoes}
-          aoMudar={(v) => alterar('textoExclusoes', v)}
-        />
-        <AreaTexto
-          rotulo="Garantia"
-          valor={rascunho.textoGarantia}
-          aoMudar={(v) => alterar('textoGarantia', v)}
-        />
-        <AreaTexto
-          rotulo="Condições de pagamento"
-          valor={rascunho.textoCondicoesPagamento}
-          aoMudar={(v) => alterar('textoCondicoesPagamento', v)}
-        />
-        <AreaTexto
-          rotulo="Observações"
-          valor={rascunho.observacoes}
-          aoMudar={(v) => alterar('observacoes', v)}
-          linhas={3}
-        />
       </section>
 
       {/*
@@ -581,30 +645,6 @@ function BotaoPrevia({ aoAbrir }: { aoAbrir: () => void }) {
     >
       Ver prévia
     </Botao>
-  )
-}
-
-function AreaTexto({
-  rotulo,
-  valor,
-  aoMudar,
-  linhas = 6,
-}: {
-  rotulo: string
-  valor: string
-  aoMudar: (valor: string) => void
-  linhas?: number
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-tinta">{rotulo}</label>
-      <textarea
-        value={valor}
-        onChange={(e) => aoMudar(e.target.value)}
-        rows={linhas}
-        className="w-full rounded-lg border border-borda bg-superficie px-3 py-2.5 text-base leading-relaxed text-tinta outline-none transition-colors focus:border-marca focus:ring-2 focus:ring-marca/20"
-      />
-    </div>
   )
 }
 
