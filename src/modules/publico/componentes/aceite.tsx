@@ -145,7 +145,7 @@ export function Aceite({
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               autoComplete="name"
-              className="min-h-12 rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
+              className="min-h-12 rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-tinta focus:ring-2 focus:ring-tinta/15"
             />
           </label>
 
@@ -156,7 +156,7 @@ export function Aceite({
               onChange={(e) => setCpf(formatarCnpjCpf(e.target.value))}
               inputMode="numeric"
               placeholder="000.000.000-00"
-              className="min-h-12 rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
+              className="min-h-12 rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-tinta focus:ring-2 focus:ring-tinta/15"
             />
             {situacaoCpf === 'invalido' && (
               <span className="text-xs text-atencao-forte">
@@ -176,7 +176,7 @@ export function Aceite({
               onChange={(e) => setEndereco(e.target.value)}
               rows={2}
               placeholder="Rua, número, bairro, cidade"
-              className="rounded-lg border border-borda bg-superficie px-3 py-2.5 text-base leading-relaxed text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
+              className="rounded-lg border border-borda bg-superficie px-3 py-2.5 text-base leading-relaxed text-tinta outline-none focus:border-tinta focus:ring-2 focus:ring-tinta/15"
             />
           </label>
 
@@ -186,7 +186,7 @@ export function Aceite({
             type="button"
             onClick={confirmar}
             disabled={enviando}
-            className="flex min-h-14 items-center justify-center rounded-xl bg-marca text-base font-semibold text-white disabled:opacity-60"
+            className="flex min-h-14 items-center justify-center rounded-xl bg-tinta text-base font-semibold text-white disabled:opacity-60"
           >
             {enviando ? 'Confirmando…' : 'Confirmar aceite'}
           </button>
@@ -210,7 +210,7 @@ export function Aceite({
         <button
           type="button"
           onClick={() => setEtapa('dados')}
-          className="flex min-h-14 items-center justify-center rounded-xl bg-marca text-base font-semibold text-white"
+          className="flex min-h-14 items-center justify-center rounded-xl bg-tinta text-base font-semibold text-white"
         >
           Aceitar orçamento
         </button>
@@ -226,7 +226,7 @@ export function Aceite({
         href={linkDuvida}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex min-h-12 items-center justify-center rounded-xl border border-borda bg-superficie text-sm font-medium text-tinta"
+        className="flex min-h-12 items-center justify-center rounded-xl border border-borda-forte bg-superficie text-sm font-semibold text-tinta"
       >
         Tenho uma dúvida
       </a>

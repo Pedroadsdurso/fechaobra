@@ -97,19 +97,26 @@ export default async function PaginaPublica({ params }: { params: Promise<{ toke
         aceitoEm={publico.respondidoEm}
       />
 
-      <div className="mt-4 flex flex-col gap-2">
+      {/*
+        O PDF é ação de arquivo, não de decisão: fica abaixo dos dois botões
+        que importam e com peso menor. O design não previa este link, mas ele
+        é função existente — tirar seria mudar o produto, não refiná-lo.
+      */}
+      <div className="mt-3 text-center">
         <a
           href={`/api/p/${publico.token}/pdf`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex min-h-12 items-center justify-center rounded-lg border border-borda bg-superficie text-sm font-medium text-tinta"
+          className="inline-flex min-h-11 items-center px-3 text-[13px] font-medium text-tinta-meta underline underline-offset-4"
         >
           Ver em PDF
         </a>
       </div>
 
-      <footer className="mt-6 px-1 pb-8 text-center">
-        <p className="text-xs text-tinta-suave">
+      <footer className="mt-4 px-1 pb-8 text-center">
+        <p className="text-[11px] leading-normal text-tinta-meta">
+          Orçamento nº {String(publico.numero).padStart(3, '0')}
+          <br />
           {publico.empresa.nome}
           {publico.empresa.telefone && ` · ${publico.empresa.telefone}`}
         </p>

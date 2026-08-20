@@ -25,6 +25,21 @@
   --color-marca: #1f2937;
   --color-marca-forte: #0f1723;
 
+  /*
+    Tons de leitura do refino visual.
+
+    O #4E5761 é mais escuro que o tinta-suave (#646d78) de propósito: esta
+    proposta é lida no celular, muitas vezes no sol, por alguém decidindo
+    gastar alguns milhares de reais. Contraste ali não é estética.
+
+    Aditivos: nenhum token existente muda de valor, então nenhuma tela que
+    ainda não passou pelo refino se mexe sozinha.
+  */
+  --color-tinta-leitura: #333a43;
+  --color-tinta-meta: #4e5761;
+  --color-linha: #edeff2;
+  --color-borda-forte: #d8dce1;
+
   /* Estados */
   --color-perigo: #b42318;
   --color-atencao: #b25e09;
