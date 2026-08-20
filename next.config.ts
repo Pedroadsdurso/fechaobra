@@ -39,6 +39,18 @@ function exigirUrlBase() {
 
 exigirUrlBase()
 
-const nextConfig: NextConfig = {}
+const nextConfig: NextConfig = {
+  /*
+    As .ttf vivem em public/, que a Vercel serve pela CDN e NÃO empacota na
+    função serverless. Só que esta rota gera o PDF no servidor e precisa ler
+    os arquivos do disco — sem isto ela responde 500 com corpo vazio, e só na
+    Vercel: com `next start` o diretório de trabalho é a raiz e tudo resolve.
+
+    A chave é um glob de rota, com os colchetes escapados.
+  */
+  outputFileTracingIncludes: {
+    '/api/p/\\[token\\]/pdf': ['./public/fonts/**/*'],
+  },
+}
 
 export default nextConfig

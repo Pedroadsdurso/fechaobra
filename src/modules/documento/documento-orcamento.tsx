@@ -32,7 +32,16 @@ const s = StyleSheet.create({
  * No navegador as URLs públicas ("/mock/logo.png") já resolvem sozinhas. Em
  * Node não existe raiz de servidor, então o mesmo caminho precisa virar
  * "public/mock/logo.png" para ser lido do disco.
+ *
+ * URL ABSOLUTA NÃO LEVA PREFIXO. O logo de um prestador real é uma URL
+ * assinada do Supabase Storage; prefixá-la produzia "publichttps://…", que
+ * não é endereço de nada. Só o mock usa caminho relativo — e era só o mock
+ * que passava por aqui quando esta função foi escrita.
  */
+function prefixar(url: string, base: string) {
+  return /^(https?:)?\/\//.test(url) || url.startsWith('data:') ? url : `${base}${url}`
+}
+
 function comBase(orcamento: OrcamentoDocumento, base: string): OrcamentoDocumento {
   if (!base) return orcamento
 
@@ -40,9 +49,11 @@ function comBase(orcamento: OrcamentoDocumento, base: string): OrcamentoDocument
     ...orcamento,
     empresa: {
       ...orcamento.empresa,
-      logoUrl: orcamento.empresa.logoUrl ? `${base}${orcamento.empresa.logoUrl}` : undefined,
+      logoUrl: orcamento.empresa.logoUrl
+        ? prefixar(orcamento.empresa.logoUrl, base)
+        : undefined,
     },
-    fotos: orcamento.fotos.map((foto) => ({ ...foto, url: `${base}${foto.url}` })),
+    fotos: orcamento.fotos.map((foto) => ({ ...foto, url: prefixar(foto.url, base) })),
   }
 }
 

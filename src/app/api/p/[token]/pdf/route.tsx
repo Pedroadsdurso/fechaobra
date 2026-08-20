@@ -1,5 +1,6 @@
-import { renderToStream } from '@react-pdf/renderer'
+import { renderToBuffer } from '@react-pdf/renderer'
 import { NextResponse, type NextRequest } from 'next/server'
+import path from 'node:path'
 
 import { dentroDoLimite, ipDaRequisicao } from '@/lib/limite-taxa'
 import { paraDocumento } from '@/modules/orcamentos/adaptador-documento'
@@ -18,6 +19,26 @@ import { urlPublica as urlPublicaDoToken } from '@/lib/url-base'
  *
  * Mesmo adaptador e mesmos componentes do resto do app: o arquivo daqui é
  * idêntico ao que o prestador baixa no editor.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE O CAMINHO DAS FONTES É ABSOLUTO
+ * ---------------------------------------------------------------------------
+ * Antes daqui saía base="public", que virava o caminho RELATIVO
+ * "public/fonts/Inter-Regular.ttf". Rodando `next start` na máquina, o
+ * diretório de trabalho é a raiz do projeto e o arquivo resolve — 200, PDF de
+ * 62 KB. Na Vercel, o diretório é /var/task e a pasta public/ NÃO entra na
+ * função serverless: ela é servida pela CDN. O arquivo não existe, o
+ * react-pdf lança, e a resposta sai 500 com corpo vazio.
+ *
+ * Duas coisas consertam isso, e as duas são necessárias:
+ *   1. process.cwd() aqui, para não depender do diretório de trabalho;
+ *   2. outputFileTracingIncludes no next.config.ts, para as .ttf serem
+ *      empacotadas junto com esta função.
+ *
+ * renderToBuffer no lugar de renderToStream: o PDF tem ~60 KB, não há ganho
+ * em transmitir em pedaços, e some a conversão entre stream do Node e stream
+ * da Web — mais uma diferença entre a máquina e o serverless.
+ * ---------------------------------------------------------------------------
  */
 export async function GET(request: NextRequest, contexto: { params: Promise<{ token: string }> }) {
   const { token } = await contexto.params
@@ -38,15 +59,19 @@ export async function GET(request: NextRequest, contexto: { params: Promise<{ to
     urlPublica: urlPublicaDoToken(publico.token),
   })
 
-  const fluxo = await renderToStream(<DocumentoOrcamento orcamento={documento} base="public" />)
+  const raiz = path.join(process.cwd(), 'public')
+  const arquivo = await renderToBuffer(
+    <DocumentoOrcamento orcamento={documento} base={raiz} />,
+  )
 
   const nome = `orcamento-${String(publico.numero).padStart(3, '0')}.pdf`
 
-  return new NextResponse(fluxo as unknown as ReadableStream, {
+  return new NextResponse(arquivo as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/pdf',
       // inline: abre no visualizador do celular em vez de baixar direto.
       'Content-Disposition': `inline; filename="${nome}"`,
+      'Content-Length': String(arquivo.length),
       'Cache-Control': 'private, no-store',
     },
   })

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-import { Botao } from '@/componentes/ui/botao'
+import { Botao, classesBotao } from '@/componentes/ui/botao'
 import { Dialogo } from '@/componentes/ui/dialogo'
 import type { Cliente } from '@/modules/clientes/tipos'
 import type { EmpresaDocumento } from '@/modules/documento/tipos'
@@ -112,15 +112,32 @@ export function DialogoEnvio({
           </p>
         )}
 
+        {/*
+          Um <a> de verdade, e SÓ um <a>.
+
+          Duas coisas estavam erradas aqui, e as duas só aparecem no iPhone:
+
+          1. Havia um <button> dentro do <a>. A especificação do HTML proíbe
+             conteúdo interativo dentro de <a>, e o que acontece então é
+             decisão de cada navegador. O Safari deixa o <button> consumir o
+             toque — e como ele é type="button", não faz nada. Silenciosamente.
+
+          2. target="_blank" atrapalha a entrega para o aplicativo. O wa.me é
+             universal link: o iOS o intercepta e passa para o WhatsApp. Numa
+             aba nova essa passagem falha com frequência e sobra uma aba em
+             branco. Na mesma aba, o sistema assume e o app abre.
+
+          O que NÃO era o problema, verificado antes de mexer: não há
+          window.open nem await entre o toque e a abertura — o href já estava
+          montado no render; e o número sai correto (só dígitos, 55 na frente),
+          com URL de ~446 caracteres, longe de qualquer limite.
+        */}
         <a
           href={linkWhatsApp(cliente?.telefone ?? '', mensagem)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block"
+          rel="noopener"
+          className={classesBotao({ tamanho: 'grande', larguraTotal: true })}
         >
-          <Botao type="button" tamanho="grande" larguraTotal>
-            Mandar no WhatsApp
-          </Botao>
+          Mandar no WhatsApp
         </a>
 
         <BotaoBaixarPdf

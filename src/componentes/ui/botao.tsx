@@ -18,6 +18,37 @@ const TAMANHOS: Record<Tamanho, string> = {
   grande: 'min-h-12 px-5 text-base',
 }
 
+/**
+ * As classes, isoladas do <button>.
+ *
+ * Existe porque nem todo botão pode SER um <button>: um link para o WhatsApp
+ * precisa ser um <a href> de verdade. Aninhar <button> dentro de <a> é HTML
+ * inválido — a especificação proíbe conteúdo interativo dentro de <a> — e o
+ * comportamento fica por conta do navegador. Ver a nota em dialogo-envio.tsx.
+ */
+export function classesBotao({
+  variante = 'primario',
+  tamanho = 'medio',
+  larguraTotal = false,
+  className,
+}: {
+  variante?: Variante
+  tamanho?: Tamanho
+  larguraTotal?: boolean
+  className?: string
+} = {}) {
+  return cn(
+    'inline-flex items-center justify-center gap-2 rounded-lg font-medium',
+    'transition-colors outline-none',
+    'focus-visible:ring-2 focus-visible:ring-marca focus-visible:ring-offset-2',
+    'disabled:cursor-not-allowed disabled:opacity-50',
+    VARIANTES[variante],
+    TAMANHOS[tamanho],
+    larguraTotal && 'w-full',
+    className,
+  )
+}
+
 type Props = ComponentProps<'button'> & {
   variante?: Variante
   tamanho?: Tamanho
@@ -33,16 +64,7 @@ export function Botao({
 }: Props) {
   return (
     <button
-      className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium',
-        'transition-colors outline-none',
-        'focus-visible:ring-2 focus-visible:ring-marca focus-visible:ring-offset-2',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        VARIANTES[variante],
-        TAMANHOS[tamanho],
-        larguraTotal && 'w-full',
-        className,
-      )}
+      className={classesBotao({ variante, tamanho, larguraTotal, className })}
       {...props}
     />
   )
