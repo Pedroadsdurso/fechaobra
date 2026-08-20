@@ -408,21 +408,70 @@ export function EditorOrcamento({
         />
       </section>
 
-      {pendencias.length > 0 ? (
-        <Alerta tom="aviso">
-          Rascunho salvo. Para enviar falta {pendencias.join(' e ')}.
-        </Alerta>
-      ) : (
-        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 -mx-4 border-t border-borda bg-superficie px-4 py-3 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0">
-          <Botao type="button" tamanho="grande" larguraTotal onClick={enviar} disabled={enviando}>
-            {enviando
-              ? 'Preparando…'
-              : rascunho.status === 'rascunho'
-                ? 'Enviar orçamento'
-                : 'Mandar de novo'}
-          </Botao>
-        </div>
-      )}
+      {/*
+        A barra é fixa e fica por cima do conteúdo. Sem esta folga, o último
+        campo do editor ficaria embaixo dela e não dava para digitar. O
+        pb-28 do AppShell cobre só a barra de navegação, não esta.
+      */}
+      <div className="h-20 lg:hidden" aria-hidden />
+
+      {/*
+        UMA barra, não dois flutuantes.
+
+        Antes havia um botão fixo de "Ver prévia" (z-30) por cima da faixa de
+        envio (z-20), ambos ancorados na base. Medido em viewport de 393px:
+        em toda posição de rolagem, menos o fim absoluto, a prévia cobria o
+        canto direito do "Enviar orçamento" — 33% da largura do botão não
+        recebia o toque, abria a prévia. No iPhone é pior: a área segura
+        (~34px) levanta a prévia e a sobreposição passa a valer no fim também.
+
+        Dois elementos fixos irmãos disputando a mesma âncora sempre voltam a
+        colidir quando um deles mudar de tamanho. A correção é estrutural: os
+        dois entram na MESMA linha flex. Enviar ocupa o espaço restante,
+        prévia tem largura própria — não há como se sobreporem.
+      */}
+      <div
+        className="
+          fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30
+          border-t border-borda bg-superficie px-4 py-3
+          lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:px-0 lg:py-0
+        "
+      >
+        {pendencias.length > 0 ? (
+          <div className="flex items-center gap-3">
+            <p className="min-w-0 flex-1 text-xs leading-snug text-tinta-suave lg:hidden">
+              Falta {pendencias.join(' e ')}.
+            </p>
+            <div className="hidden flex-1 lg:block">
+              <Alerta tom="aviso">
+                Rascunho salvo. Para enviar falta {pendencias.join(' e ')}.
+              </Alerta>
+            </div>
+            <BotaoPrevia aoAbrir={() => setPreviewAberto(true)} />
+          </div>
+        ) : (
+          <div className="flex items-stretch gap-2">
+            <BotaoPrevia aoAbrir={() => setPreviewAberto(true)} />
+            {/*
+              min-w-0 impede que o texto do botão force a linha a crescer e
+              empurre a prévia para fora da tela em aparelho estreito.
+            */}
+            <Botao
+              type="button"
+              tamanho="grande"
+              onClick={enviar}
+              disabled={enviando}
+              className="min-w-0 flex-1"
+            >
+              {enviando
+                ? 'Preparando…'
+                : rascunho.status === 'rascunho'
+                  ? 'Enviar orçamento'
+                  : 'Mandar de novo'}
+            </Botao>
+          </div>
+        )}
+      </div>
 
       <DialogoBiblioteca
         aberto={bibliotecaAberta}
@@ -431,17 +480,6 @@ export function EditorOrcamento({
         aoEscolher={usarDaBiblioteca}
         aoRemover={(id) => setItensBiblioteca((atual) => atual.filter((i) => i.id !== id))}
       />
-
-      {/*
-        No celular o PDF não cabe ao lado — 440px de visor num aparelho de
-        390px de largura espremeria o editor a nada. Vira um botão fixo acima
-        da barra de navegação, que abre o documento em tela cheia.
-      */}
-      <div className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 lg:hidden">
-        <Botao type="button" tamanho="grande" onClick={() => setPreviewAberto(true)}>
-          Ver prévia
-        </Botao>
-      </div>
 
       {envio && (
         <DialogoEnvio
@@ -469,6 +507,25 @@ export function EditorOrcamento({
       {/* Desktop: o documento acompanha a rolagem do editor. */}
       <aside className="sticky top-6 hidden h-[calc(100dvh-6rem)] lg:block">{preview}</aside>
     </div>
+  )
+}
+
+/**
+ * A prévia é ação secundária: no celular o PDF não cabe ao lado, então ela
+ * abre em tela cheia. No desktop o documento já está fixo na coluna da
+ * direita, e o botão não faz sentido — por isso `lg:hidden`.
+ */
+function BotaoPrevia({ aoAbrir }: { aoAbrir: () => void }) {
+  return (
+    <Botao
+      type="button"
+      variante="secundario"
+      tamanho="grande"
+      onClick={aoAbrir}
+      className="shrink-0 lg:hidden"
+    >
+      Ver prévia
+    </Botao>
   )
 }
 
