@@ -133,3 +133,42 @@ virar imagem, este comando falha com código 1.
   react-pdf usa regra do inglês e quebraria "im-permeabilização".
 - **O documento não conhece o banco**: recebe `OrcamentoDocumento`, um formato
   próprio. Na Fase 2 entra um adaptador entre as tabelas e esse tipo.
+
+### Variável de ambiente em Client Component nunca
+
+Toda URL e toda configuração é resolvida **no servidor** e passada por prop.
+Client Component não lê `process.env` sem o prefixo `NEXT_PUBLIC_`.
+
+O Next injeta no bundle do navegador apenas variáveis com esse prefixo. Sem ele,
+no cliente a variável é `undefined` — e essa é a classe de bug mais traiçoeira
+do projeto, porque nada a denuncia antes do usuário:
+
+- o `tsc` não vê: `process.env.X` é string em qualquer ambiente;
+- o `eslint` não vê: é acesso a propriedade, sintaticamente perfeito;
+- **o build passa**: durante o build, no servidor, a variável existe;
+- **o `npm run dev` funciona**: o fallback de localhost cobre o buraco.
+
+Ela só aparece no navegador de quem pagou, em produção.
+
+Foi assim que quase foi para o ar: `DialogoEnvio` — a tela onde o prestador copia
+o link para mandar no WhatsApp — chamava `urlBase()`, que lê
+`VERCEL_PROJECT_PRODUCTION_URL`. Num deploy que dependesse do fallback da Vercel,
+o build passaria e o diálogo quebraria com erro no primeiro envio de orçamento.
+Encontrado inspecionando o bundle gerado, não rodando o app.
+
+Por isso a regra tem um **check que derruba o build**, não um comentário:
+
+```
+npm run verificar:fronteira    # roda sozinho antes de `next build`
+```
+
+`scripts/verificar-fronteira.mjs` percorre o grafo de imports a partir de cada
+arquivo `'use client'` — **transitivamente**, porque o defeito não precisa estar
+no componente, basta ele importar quem lê — e falha se encontrar leitura de
+`process.env` sem `NEXT_PUBLIC_` (exceto `NODE_ENV`, que o próprio Next
+substitui) ou import de `lib/url-base`.
+
+A travessia para em arquivos `'use server'` e em quem importa `server-only`: o
+Next troca esses imports por RPC, nada deles vai para o bundle, e ler
+`SUPABASE_SERVICE_ROLE_KEY` ali é o comportamento correto. Um check que acusasse
+isso ensinaria a ignorá-lo.

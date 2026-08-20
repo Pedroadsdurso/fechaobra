@@ -219,3 +219,4 @@ Faça **no celular**, e não no desktop — é onde o produto vive. Marque um a 
 | `Build de produção interrompido: falta a URL pública` | nenhuma das três fontes de URL existe | defina `NEXT_PUBLIC_URL_BASE` em Production |
 | `supabaseUrl is required` | `NEXT_PUBLIC_SUPABASE_URL` ausente ou com espaço | recadastre a variável e redeploy |
 | erro 500 no cadastro | as migrations não foram aplicadas neste projeto Supabase | rode `0001` a `0005` na ordem |
+| `FRONTEIRA SERVIDOR/CLIENTE VIOLADA` | um Client Component passou a ler variável de ambiente sem `NEXT_PUBLIC_` | é o check propositalmente derrubando o build. A saída diz o arquivo, a linha e o caminho de imports. Resolva o valor no servidor e passe por prop — ver README |
