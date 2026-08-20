@@ -173,10 +173,21 @@ Next troca esses imports por RPC, nada deles vai para o bundle, e ler
 `SUPABASE_SERVICE_ROLE_KEY` ali é o comportamento correto. Um check que acusasse
 isso ensinaria a ignorá-lo.
 
-### Hidratação quebrada é invisível — rode `verificar:hidratacao` antes de todo deploy
+### Hidratação quebrada é invisível — rode `verificar:hidratacao` antes e depois de todo deploy
 
 **Hidratação quebrada é invisível em `tsc`, `lint`, screenshot e peso de bundle.
-Rodar `verificar:hidratacao` contra produção antes de todo deploy.**
+Rodar `verificar:hidratacao` contra produção antes e depois de todo deploy.**
+
+As duas leituras respondem perguntas diferentes, e é a diferença entre elas que
+tem valor:
+
+- **antes** diz se o problema já existia;
+- **depois** diz se foi você que o criou.
+
+Sem as duas, um alarme não distingue regressão de defeito antigo — e essa foi
+exatamente a informação que faltou no alarme falso que originou este script.
+Eu não sabia se o que estava vendo era novo, e tratei "está quebrado" como
+"eu quebrei agora".
 
 Quando o React não monta, o HTML do servidor continua perfeito: a tela aparece
 inteira, o print fica idêntico ao de uma página saudável, os arquivos JS são

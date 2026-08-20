@@ -45,6 +45,11 @@
  * De quebra, criar a conta pela interface exercita o cadastro de verdade —
  * se o cadastro quebrar, o teste também acusa.
  *
+ * Rode ANTES E DEPOIS de todo deploy. As duas leituras respondem perguntas
+ * diferentes: antes diz se o problema já existia, depois diz se foi você que
+ * o criou. Sem as duas, um alarme não distingue regressão de defeito antigo —
+ * foi exatamente essa informação que faltou no susto acima.
+ *
  * Uso:
  *   npm run verificar:hidratacao
  *   BASE=https://fechaobraa.vercel.app npm run verificar:hidratacao
