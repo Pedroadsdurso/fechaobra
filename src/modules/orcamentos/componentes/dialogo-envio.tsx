@@ -6,7 +6,6 @@ import { Botao } from '@/componentes/ui/botao'
 import { Dialogo } from '@/componentes/ui/dialogo'
 import type { Cliente } from '@/modules/clientes/tipos'
 import type { EmpresaDocumento } from '@/modules/documento/tipos'
-import { urlBase } from '@/lib/url-base'
 
 import { linkWhatsApp, montarMensagem, nomeDeTratamento } from '../mensagem-whatsapp'
 import type { RascunhoOrcamento } from '../tipos'
@@ -29,6 +28,7 @@ export function DialogoEnvio({
   empresa,
   token,
   reenvio,
+  urlBase,
 }: {
   aberto: boolean
   aoFechar: () => void
@@ -37,14 +37,19 @@ export function DialogoEnvio({
   empresa: EmpresaDocumento
   token: string
   reenvio: boolean
+  /**
+   * Calculada no SERVIDOR e passada para cá.
+   *
+   * Chamar urlBase() daqui pareceria funcionar em desenvolvimento e quebraria
+   * em produção: as variáveis da Vercel não existem no navegador, e um deploy
+   * que dependa do fallback delas deixaria este componente sem resposta
+   * justamente na hora de enviar. Ver a nota em lib/url-base.ts.
+   */
+  urlBase: string
 }) {
   const [copiado, setCopiado] = useState(false)
 
-  // NEXT_PUBLIC_URL_BASE é inlinada no bundle em tempo de build, então o valor
-  // aqui é o do ambiente que gerou o deploy — não o do navegador. É o que
-  // garante que o link mandado seja o de produção. O build quebra se ela
-  // faltar em produção (ver next.config.ts).
-  const url = useMemo(() => `${urlBase()}/p/${token}`, [token])
+  const url = useMemo(() => `${urlBase}/p/${token}`, [urlBase, token])
 
   const mensagem = useMemo(
     () =>

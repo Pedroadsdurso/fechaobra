@@ -54,11 +54,14 @@ export function EditorOrcamento({
   clientes,
   biblioteca,
   empresa,
+  urlBase,
 }: {
   inicial: RascunhoOrcamento
   clientes: Cliente[]
   biblioteca: ItemBiblioteca[]
   empresa: EmpresaDocumento
+  /** URL pública da aplicação, resolvida no servidor. */
+  urlBase: string
 }) {
   const [rascunho, setRascunho] = useState(inicial)
   const [itensBiblioteca, setItensBiblioteca] = useState(biblioteca)
@@ -449,6 +452,7 @@ export function EditorOrcamento({
           empresa={empresa}
           token={envio.token}
           reenvio={envio.reenvio}
+          urlBase={urlBase}
         />
       )}
 

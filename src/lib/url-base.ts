@@ -11,6 +11,19 @@
  * resolver (ver a checagem em next.config.ts, que roda antes de qualquer
  * página ser gerada).
  *
+ * ===========================================================================
+ * SÓ CHAME ISTO NO SERVIDOR.
+ * ===========================================================================
+ *
+ * O Next injeta no bundle do navegador apenas variáveis com prefixo
+ * NEXT_PUBLIC_. As da Vercel (VERCEL_PROJECT_PRODUCTION_URL, VERCEL_URL) não
+ * têm esse prefixo, então no cliente elas são `undefined` — e num deploy que
+ * dependa só do fallback da Vercel, `urlBase()` chamada no navegador lançaria
+ * erro em produção, mesmo com o build tendo passado.
+ *
+ * Quem precisa da URL no cliente recebe por prop, calculada no servidor.
+ * ===========================================================================
+ *
  * Ordem de precedência:
  *
  *   1. NEXT_PUBLIC_URL_BASE — o domínio próprio, quando existir. Sempre vence.

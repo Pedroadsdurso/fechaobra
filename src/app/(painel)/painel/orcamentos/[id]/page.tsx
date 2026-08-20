@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { listarClientes } from '@/modules/clientes/consultas'
 import { carregarMarca } from '@/modules/perfil/consultas'
+import { urlBase } from '@/lib/url-base'
 import { EditorOrcamento } from '@/modules/orcamentos/componentes/editor-orcamento'
 import { carregarOrcamento, listarItensBiblioteca } from '@/modules/orcamentos/consultas'
 
@@ -36,6 +37,9 @@ export default async function PaginaOrcamento({ params }: { params: Promise<{ id
         inicial={carregado.rascunho}
         clientes={clientes}
         biblioteca={biblioteca}
+        // Resolvida aqui, no servidor: no navegador as variáveis da Vercel
+        // não existem. Ver lib/url-base.ts.
+        urlBase={urlBase()}
         // A URL do logo já vem assinada daqui: o bucket é privado e o preview
         // roda no navegador, que não tem como assinar nada sozinho.
         empresa={{
