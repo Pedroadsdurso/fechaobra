@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * Tailwind v4 — a configuração é CSS-first. Não existe tailwind.config.ts:
+ * os tokens declarados em @theme viram utilitários automaticamente
+ * (--color-marca  ->  bg-marca, text-marca, border-marca, marca/20 ...).
+ *
+ * Paleta neutra e proposital para a Fase 0. A cor da marca de cada prestador
+ * vem de perfis.cor_primaria e entra no PDF e no link público, na Fase 1.
+ * ------------------------------------------------------------------------- */
+@theme {
+  --font-sans: var(--fonte-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--fonte-mono), ui-monospace, monospace;
+
+  /* Superfícies */
+  --color-fundo: #f6f7f9;
+  --color-superficie: #ffffff;
+  --color-borda: #e3e6ea;
+
+  /* Texto */
+  --color-tinta: #14181d;
+  --color-tinta-suave: #646d78;
+
+  /* Marca (neutra por enquanto) */
+  --color-marca: #1f2937;
+  --color-marca-forte: #0f1723;
+
+  /* Estados */
+  --color-perigo: #b42318;
+  --color-atencao: #b25e09;
+  --color-atencao-forte: #7a4106;
+  --color-sucesso: #067647;
+}
+
+@layer base {
+  html {
+    /* Evita que o iOS aumente a fonte sozinho ao girar a tela. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-fundo);
+    color: var(--color-tinta);
+    font-family: var(--font-sans);
+    /* Entrelinha generosa: o app é lido no celular, no sol, na obra. */
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Respeita a área do notch e da barra de gestos do iPhone. */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  :focus-visible {
+    outline: none;
+  }
+}
