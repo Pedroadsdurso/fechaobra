@@ -41,6 +41,28 @@ import type { Json } from '@/lib/tipos-banco'
  *
  * A Cakto tenta de novo até 5 vezes (5s, 1min, 2min30, 6min, 30min) e espera
  * 2xx em até 8 segundos. Por isso esta rota faz uma coisa só: gravar.
+ *
+ * ===========================================================================
+ * PENDÊNCIA: PAYLOAD DE TESTE NÃO É PAYLOAD DE VENDA
+ * ===========================================================================
+ * O mapeamento de campos da Etapa B foi escrito olhando eventos disparados
+ * pelo endpoint de teste da Cakto (/public_api/webhook/event_test/). Payload
+ * de teste pode omitir ou preencher com valor fixo campos que só existem numa
+ * venda de verdade — meio de pagamento, parcelamento, dados fiscais, cupom,
+ * e possivelmente o próprio formato do e-mail do comprador.
+ *
+ * QUANDO A PRIMEIRA VENDA REAL ACONTECER: compare o payload dela com o de
+ * teste em eventos_cakto e avise se houver diferença que quebre o mapeamento.
+ * A consulta:
+ *
+ *   select tipo, criado_em, payload
+ *     from eventos_cakto
+ *    where tipo = 'purchase_approved'
+ *    order by criado_em;
+ *
+ * A primeira linha é o teste, a última é a venda. Diferença em campo usado
+ * pela liberação é defeito que só aparece com dinheiro em jogo.
+ * ===========================================================================
  */
 
 /** Corpo maior que isto não é webhook de venda — é alguém enchendo a tabela. */
