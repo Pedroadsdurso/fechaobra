@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
+
+import { SimboloFechaObra } from '@/componentes/marca/simbolo'
 import Link from 'next/link'
 
-import { IconeOrcamentos } from '@/componentes/layout/icones'
 import { BotaoNovoOrcamento } from '@/modules/orcamentos/componentes/botao-novo-orcamento'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
@@ -56,9 +57,9 @@ export default async function PaginaPainel() {
 
       {/* Estado vazio — as telas de orçamento entram na Fase 2, etapas C e E. */}
       <div className="flex flex-col items-center rounded-xl border border-dashed border-borda bg-superficie px-6 py-12 text-center">
-        <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-fundo text-tinta-suave">
-          <IconeOrcamentos className="size-6" />
-        </div>
+        {/* O símbolo sozinho, bem apagado: preenche o vazio sem competir com
+            a ação. Aqui pode — é tela do prestador, não do cliente. */}
+        <SimboloFechaObra className="mb-4 size-11 text-tinta-suave/25" />
 
         <h2 className="text-base font-semibold text-tinta">Nenhum orçamento ainda</h2>
         <p className="mt-1 max-w-sm text-sm text-tinta-suave">

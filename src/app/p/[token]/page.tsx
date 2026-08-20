@@ -19,15 +19,34 @@ export async function generateMetadata({
   const { token } = await params
   const publico = await carregarOrcamentoPublico(token)
 
-  if (!publico) return { title: 'Orçamento não encontrado' }
+  if (!publico) return { title: { absolute: 'Orçamento não encontrado' } }
 
   // Sem valor no título nem na descrição: é o que aparece na prévia do link no
   // WhatsApp, e vale a mesma regra da mensagem — o número não pode chegar
   // antes do escopo. Ver mensagem-whatsapp.ts.
   return {
-    title: `${publico.rascunho.titulo || 'Orçamento'} · ${publico.empresa.nome}`,
+    /*
+      `absolute` escapa do template '%s · FechaObra' do layout raiz.
+
+      Sem isso o título sai "Reforma de banheiro · Andrade Elétrica ·
+      FechaObra" — e esse título é o que aparece na aba do cliente E na
+      prévia do link no WhatsApp, que é o primeiro contato dele com a
+      proposta. A assinatura ali é do prestador.
+    */
+    title: { absolute: `${publico.rascunho.titulo || 'Orçamento'} · ${publico.empresa.nome}` },
     description: `Orçamento nº ${String(publico.numero).padStart(3, '0')} de ${publico.empresa.nome}.`,
     robots: { index: false, follow: false },
+    /*
+      Sobrescreve o que o layout raiz herda para cá.
+
+      Sem estas duas linhas, o HTML desta página serve
+      <meta name="application-name" content="FechaObra"> e
+      <meta name="apple-mobile-web-app-title" content="FechaObra"> — o
+      segundo é o nome que aparece embaixo do ícone se o cliente adicionar o
+      orçamento à tela inicial. Quem assina aqui é o prestador.
+    */
+    applicationName: publico.empresa.nome,
+    appleWebApp: { title: publico.empresa.nome },
   }
 }
 
@@ -94,7 +113,6 @@ export default async function PaginaPublica({ params }: { params: Promise<{ toke
           {publico.empresa.nome}
           {publico.empresa.telefone && ` · ${publico.empresa.telefone}`}
         </p>
-        <p className="mt-2 text-[11px] text-tinta-suave/70">Orçamento gerado no FechaObra</p>
       </footer>
     </main>
   )

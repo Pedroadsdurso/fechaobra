@@ -1,11 +1,13 @@
 import Link from 'next/link'
 
+import { LogotipoFechaObra } from '@/componentes/marca/logotipo'
+
 export default function LayoutPublico({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <Link href="/" className="mb-8 flex flex-col items-center gap-1.5">
-          <span className="text-2xl font-semibold tracking-tight text-tinta">FechaObra</span>
+        <Link href="/" className="mb-8 flex flex-col items-center gap-2.5">
+          <LogotipoFechaObra orientacao="empilhado" tamanho="grande" />
           <span className="text-center text-sm text-tinta-suave">
             Orçamento pronto em 3 minutos, com a sua cara
           </span>

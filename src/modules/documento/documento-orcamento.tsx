@@ -84,8 +84,17 @@ export function DocumentoOrcamento({
       title={`Orçamento ${String(orcamento.numero).padStart(3, '0')} — ${orcamento.empresa.nome}`}
       author={orcamento.empresa.nome}
       subject={orcamento.titulo}
-      creator="FechaObra"
-      producer="FechaObra"
+      /*
+        Quem assina o arquivo é o prestador.
+
+        Antes saía creator/producer="FechaObra". Não aparece na página do PDF,
+        mas aparece em "Propriedades do documento" em qualquer leitor — e o
+        cliente que abre o orçamento no computador vê ali o nome de uma
+        empresa que ele não contratou. É a mesma regra do rodapé e da prévia
+        do link: nada de marca nossa no que o cliente final recebe.
+      */
+      creator={orcamento.empresa.nome}
+      producer={orcamento.empresa.nome}
     >
       <Page size="A4" style={s.pagina} wrap>
         <Cabecalho orcamento={orcamento} cor={cor} />

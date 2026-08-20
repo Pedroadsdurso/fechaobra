@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { BarraLateral } from './barra-lateral'
 import { IconeSair } from './icones'
 import { NavegacaoInferior } from './navegacao-inferior'
+import { LogotipoFechaObra } from '@/componentes/marca/logotipo'
 
 /**
  * Estrutura do app autenticado.
@@ -23,7 +24,7 @@ export function AppShell({
       <BarraLateral nomeEmpresa={nomeEmpresa} email={email} />
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-borda bg-superficie px-4 md:hidden">
-        <span className="text-base font-semibold tracking-tight text-tinta">FechaObra</span>
+        <LogotipoFechaObra tamanho="pequeno" />
 
         <form action="/auth/sair" method="post">
           <button

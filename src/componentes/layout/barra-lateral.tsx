@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+
+import { LogotipoFechaObra } from '@/componentes/marca/logotipo'
 import { usePathname } from 'next/navigation'
 
 import { cn } from '@/lib/utils'
@@ -16,8 +18,8 @@ export function BarraLateral({ nomeEmpresa, email }: { nomeEmpresa: string; emai
   return (
     <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-60 md:flex-col md:border-r md:border-borda md:bg-superficie">
       <div className="flex h-16 items-center border-b border-borda px-5">
-        <Link href="/painel" className="text-lg font-semibold tracking-tight text-tinta">
-          FechaObra
+        <Link href="/painel" aria-label="FechaObra — ir para o painel">
+          <LogotipoFechaObra />
         </Link>
       </div>
 
