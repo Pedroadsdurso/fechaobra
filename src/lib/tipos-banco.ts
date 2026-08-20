@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      eventos_cakto: {
+        Row: {
+          cabecalhos: Json | null
+          criado_em: string
+          id: string
+          payload: Json
+          processado: boolean
+          segredo_valido: boolean
+          tipo: string | null
+        }
+        Insert: {
+          cabecalhos?: Json | null
+          criado_em?: string
+          id?: string
+          payload: Json
+          processado?: boolean
+          segredo_valido?: boolean
+          tipo?: string | null
+        }
+        Update: {
+          cabecalhos?: Json | null
+          criado_em?: string
+          id?: string
+          payload?: Json
+          processado?: boolean
+          segredo_valido?: boolean
+          tipo?: string | null
+        }
+        Relationships: []
+      }
       eventos_orcamento: {
         Row: {
           criado_em: string
