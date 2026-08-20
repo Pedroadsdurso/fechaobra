@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "verificar:fronteira": "node scripts/verificar-fronteira.mjs",
+    "verificar:hidratacao": "node --env-file=.env.local scripts/verificar-hidratacao.mjs",
     "tipos": "node scripts/gerar-tipos.mjs",
     "doc:render": "node scripts/render-documento.mjs",
     "doc:png": "node scripts/pdf-para-png.mjs",

@@ -172,3 +172,42 @@ A travessia para em arquivos `'use server'` e em quem importa `server-only`: o
 Next troca esses imports por RPC, nada deles vai para o bundle, e ler
 `SUPABASE_SERVICE_ROLE_KEY` ali é o comportamento correto. Um check que acusasse
 isso ensinaria a ignorá-lo.
+
+### Hidratação quebrada é invisível — rode `verificar:hidratacao` antes de todo deploy
+
+**Hidratação quebrada é invisível em `tsc`, `lint`, screenshot e peso de bundle.
+Rodar `verificar:hidratacao` contra produção antes de todo deploy.**
+
+Quando o React não monta, o HTML do servidor continua perfeito: a tela aparece
+inteira, o print fica idêntico ao de uma página saudável, os arquivos JS são
+baixados normalmente e o peso do bundle não se mexe. O `tsc` passa porque o
+código está correto — ele só não executa. O que some é a resposta ao clique.
+
+```
+npm run verificar:hidratacao                                  # local
+BASE=https://fechaobraa.vercel.app npm run verificar:hidratacao  # produção
+```
+
+`scripts/verificar-hidratacao.mjs` sobe um Chrome headless por CDP — sem
+dependência nova, o Node 22 tem WebSocket embutido — cria uma conta
+descartável pela própria tela de cadastro, abre cada rota do painel e faz uma
+ação que **só funciona com estado do React**: abrir diálogo, filtrar lista,
+digitar em campo controlado, adicionar item. No fim apaga a conta e tudo o que
+ela gerou, em `finally`, mesmo quando uma prova falha.
+
+Duas decisões que vieram de erro meu, e que não devem ser desfeitas:
+
+- **o teste sobe o próprio Chrome**, com perfil temporário e `--disable-extensions`.
+  Eu já diagnostiquei "o painel não hidrata em produção" a partir de um
+  navegador que eu mesmo havia deixado num estado inválido, e confirmei o
+  diagnóstico no mesmo navegador estragado. O app estava íntegro;
+- **as provas rodam no mundo da página**, não num mundo isolado. As chaves
+  `__react*` que o React põe nos nós do DOM são invisíveis de fora do mundo da
+  página, e isso me deu um falso negativo.
+
+Anomalia impossível é motivo para suspeitar do instrumento, não para tratar
+como dado.
+
+O teste foi validado quebrando a hidratação de propósito — um `throw` que só
+dispara no navegador — e confirmando que ele falha com código de saída 1. Um
+teste que só sabe passar não prova nada.
