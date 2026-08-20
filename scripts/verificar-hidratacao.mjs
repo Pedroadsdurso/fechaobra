@@ -223,15 +223,25 @@ async function limpar() {
   const conta = data?.users.find((u) => u.email === EMAIL)
   if (!conta) return
 
-  const { data: orcamentos } = await admin.from('orcamentos').select('id').eq('user_id', conta.id)
-  for (const o of orcamentos ?? []) {
-    await admin.from('itens_orcamento').delete().eq('orcamento_id', o.id)
-    await admin.from('eventos_orcamento').delete().eq('orcamento_id', o.id)
-    await admin.from('orcamento_pacotes').delete().eq('orcamento_id', o.id)
-    await admin.from('orcamentos').delete().eq('id', o.id)
+  /*
+    Itens, eventos e pacotes caem por ON DELETE CASCADE quando o orçamento
+    some — não preciso apagar um a um. Eu tinha escrito as três chamadas à
+    mão, e uma delas apontava para `itens_orcamento`, tabela que não existe
+    (o nome é `orcamento_itens`). Não quebrou nada porque a cascata já fazia
+    o trabalho, mas era código errado que parecia estar cuidando de algo.
+  */
+  const { error: erroOrcamentos } = await admin
+    .from('orcamentos')
+    .delete()
+    .eq('user_id', conta.id)
+  const { error: erroClientes } = await admin.from('clientes').delete().eq('user_id', conta.id)
+  const { error: erroConta } = await admin.auth.admin.deleteUser(conta.id)
+
+  const falha = erroOrcamentos ?? erroClientes ?? erroConta
+  if (falha) {
+    console.error(`\n  NÃO CONSEGUI APAGAR ${EMAIL}: ${falha.message}`)
+    console.error('  Apague à mão para não deixar lixo no banco.\n')
   }
-  await admin.from('clientes').delete().eq('user_id', conta.id)
-  await admin.auth.admin.deleteUser(conta.id)
 }
 
 async function principal() {

@@ -25,6 +25,30 @@ import type { OrcamentoNaLista } from '../consultas'
 
 import { BotaoNovoOrcamento } from './botao-novo-orcamento'
 
+/**
+ * A tela responde "o que eu faço agora" antes de "o que eu já fiz".
+ *
+ * A ordenação por urgência já existia e continua sendo a de fila-de-trabalho.
+ * O que muda aqui é que ela vira VISÍVEL: em vez de uma lista longa onde o
+ * urgente e o resolvido têm a mesma cara e a única diferença é a posição, os
+ * cartões passam a cair sob uma pergunta.
+ *
+ * Três grupos, e não seis status: o prestador não abre esta tela pensando em
+ * status, e sim em "tem algo esperando por mim?".
+ */
+type Grupo = 'precisa' | 'aguardando' | 'rascunhos'
+
+const TITULO_GRUPO: Record<Grupo, string> = {
+  precisa: 'Precisa de você',
+  aguardando: 'Aguardando',
+  rascunhos: 'Rascunhos',
+}
+
+function grupoDe(orcamento: OrcamentoNaLista): Grupo {
+  if (orcamento.status === 'rascunho') return 'rascunhos'
+  return urgenciaDe(orcamento) === 'normal' ? 'aguardando' : 'precisa'
+}
+
 function normalizar(texto: string) {
   return texto
     .normalize('NFD')
@@ -40,19 +64,21 @@ const TOM_VALIDADE: Record<TomValidade, string> = {
 }
 
 /**
- * Cores por status.
+ * O CHIP DE STATUS NÃO TEM COR.
  *
- * Os três de resposta do cliente chegam na Fase 3, mas já estão mapeados: o
- * cartão não precisa ser redesenhado quando eles começarem a aparecer.
+ * Tinha: verde para aceito, azul para enviado, vermelho para recusado. Com
+ * seis status e uma tela cheia de cartões, isso vira semáforo — e semáforo
+ * com seis luzes não informa nada, porque nenhuma cor tem significado
+ * estável quando todas competem.
+ *
+ * A cor passa a existir num lugar só: a FAIXA DE CHAMADA, no máximo uma por
+ * cartão, e apenas nos cartões que pedem ação. Assim a cor volta a querer
+ * dizer alguma coisa — "isto aqui é com você agora" — em vez de só colorir
+ * o inventário.
+ *
+ * O status continua legível: é a palavra escrita no chip.
  */
-const TOM_STATUS: Record<string, string> = {
-  rascunho: 'bg-fundo text-tinta-suave',
-  enviado: 'bg-marca/10 text-marca',
-  visualizado: 'bg-marca/10 text-marca',
-  aceito: 'bg-sucesso/10 text-sucesso',
-  recusado: 'bg-perigo/10 text-perigo',
-  expirado: 'bg-fundo text-tinta-suave',
-}
+const CHIP_STATUS = 'bg-linha text-tinta-leitura'
 
 const TOM_URGENCIA: Record<Urgencia, string> = {
   aceito: 'bg-sucesso/10 text-sucesso',
@@ -160,38 +186,44 @@ function Cartao({
         className="fo-toque block px-4 pt-3 pb-2 hover:bg-fundo/60"
       >
         <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[11px] font-medium',
-              TOM_STATUS[orcamento.status] ?? TOM_STATUS.rascunho,
-            )}
-          >
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', CHIP_STATUS)}>
             {rotuloStatus(orcamento.status)}
           </span>
-          <span className="text-xs text-tinta-suave">
+          <span className="text-xs tabular-nums text-tinta-meta">
             nº {String(orcamento.numero).padStart(3, '0')}
           </span>
-          {desdeQuando && <span className="text-xs text-tinta-suave">{desdeQuando}</span>}
 
-          {validade && urgencia === 'normal' && (
-            <span className={cn('ml-auto text-xs font-medium', TOM_VALIDADE[validade.tom])}>
-              {validade.texto}
-            </span>
-          )}
+          {/*
+            O tempo vai para a direita e ganha peso quando o cartão pede
+            ação. É o dado que responde "isto está parado há quanto tempo?"
+            de relance, sem ler o cartão inteiro.
+          */}
+          <span
+            className={cn(
+              'ml-auto shrink-0 text-xs',
+              validade && validade.tom !== 'tranquilo'
+                ? cn('font-semibold', TOM_VALIDADE[validade.tom])
+                : urgencia !== 'normal'
+                  ? 'font-semibold text-tinta'
+                  : 'text-tinta-meta',
+            )}
+          >
+            {validade && validade.tom !== 'tranquilo' ? validade.texto : desdeQuando}
+          </span>
         </div>
 
-        <p className="mt-1.5 truncate text-sm font-medium text-tinta">
+        <p className="mt-2 truncate text-[15px] font-bold text-tinta">
           {orcamento.clienteNome || 'Sem cliente'}
         </p>
 
-        <p className="truncate text-xs text-tinta-suave">
+        <p className="mt-px truncate text-[13px] text-tinta-meta">
           {[orcamento.titulo, orcamento.tipoServicoRotulo].filter(Boolean).join('  ·  ') ||
             'Sem título'}
         </p>
 
-        <p className="mt-1.5 text-base font-semibold text-tinta">
+        <p className="mt-1.5 text-[17px] font-bold tabular-nums text-tinta">
           {formatarMoeda(orcamento.total)}
-          <span className="ml-2 text-xs font-normal text-tinta-suave">
+          <span className="ml-2 text-xs font-normal text-tinta-meta">
             {orcamento.quantidadeItens} {orcamento.quantidadeItens === 1 ? 'item' : 'itens'}
           </span>
         </p>
@@ -217,7 +249,7 @@ function Cartao({
         {!saiuDaFila && chamada && (
           <p
             className={cn(
-              'mt-2 rounded-lg px-2.5 py-1.5 text-xs font-medium',
+              'mt-2.5 rounded-lg px-2.5 py-2 text-[12.5px] leading-snug font-semibold',
               TOM_URGENCIA[urgencia],
             )}
           >
@@ -234,9 +266,19 @@ function Cartao({
         )}
       </Link>
 
-      {/* Duplicar fica à vista, não dentro de menu: é a ação mais usada da
-          tela — mesmo serviço, cliente diferente. */}
-      <div className="flex gap-1 border-t border-borda px-2 py-1.5">
+      {/*
+        Duplicar fica à vista, não dentro de menu: é a ação mais usada da
+        tela — mesmo serviço, cliente diferente.
+
+        APAGAR NÃO ENTRA nos cartões que pedem ação. Ali o dedo vai rápido
+        para "WhatsApp" ou "Já combinei", e uma ação destrutiva encostada nos
+        dois botões mais tocados da tela é acidente esperando acontecer. Nos
+        cartões parados ele volta, empurrado para a direita.
+
+        whitespace-nowrap: "Já combinei" quebrava em duas linhas a 393px e
+        desalinhava a fileira inteira.
+      */}
+      <div className="flex gap-1 border-t border-linha px-2 py-1.5">
         {/* O gesto seguinte a "visto há 4 dias" é cobrar retorno — e tem que
             caber sem abrir o orçamento. */}
         {contato && (
@@ -244,7 +286,7 @@ function Cartao({
             href={contato}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex min-h-10 flex-1 items-center justify-center rounded-lg bg-marca px-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="fo-toque flex min-h-11 flex-1 items-center justify-center rounded-lg bg-marca px-3 text-sm font-bold whitespace-nowrap text-white"
           >
             WhatsApp
           </a>
@@ -261,7 +303,7 @@ function Cartao({
             type="button"
             onClick={() => aoTratar(orcamento.id, !orcamento.tratadoEm)}
             disabled={ocupado}
-            className="min-h-10 rounded-lg px-3 text-sm font-medium text-tinta transition-colors hover:bg-fundo disabled:opacity-40"
+            className="fo-toque min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold whitespace-nowrap text-tinta hover:bg-fundo disabled:opacity-40"
           >
             {orcamento.tratadoEm ? 'Voltar para a fila' : 'Já combinei'}
           </button>
@@ -271,18 +313,24 @@ function Cartao({
           type="button"
           onClick={() => aoDuplicar(orcamento.id)}
           disabled={ocupado}
-          className="min-h-10 flex-1 rounded-lg px-3 text-sm font-medium text-tinta transition-colors hover:bg-fundo disabled:opacity-40"
+          className={cn(
+            'fo-toque min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold whitespace-nowrap text-tinta hover:bg-fundo disabled:opacity-40',
+            !contato && 'flex-1',
+          )}
         >
           Duplicar
         </button>
-        <button
-          type="button"
-          onClick={() => aoApagar(orcamento)}
-          disabled={ocupado}
-          className="min-h-10 rounded-lg px-3 text-sm font-medium text-tinta-suave transition-colors hover:bg-perigo/5 hover:text-perigo disabled:opacity-40"
-        >
-          Apagar
-        </button>
+
+        {!contato && (
+          <button
+            type="button"
+            onClick={() => aoApagar(orcamento)}
+            disabled={ocupado}
+            className="fo-toque ml-auto min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold whitespace-nowrap text-tinta-meta hover:bg-perigo/5 hover:text-perigo disabled:opacity-40"
+          >
+            Apagar
+          </button>
+        )}
       </div>
     </li>
   )
@@ -388,24 +436,40 @@ export function ListaOrcamentos({ orcamentos }: { orcamentos: OrcamentoNaLista[]
           Nenhum orçamento para <span className="font-medium text-tinta">{busca}</span>.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {filtrados.map((orcamento, posicao) => (
-            <Cartao
-              key={orcamento.id}
-              // Escalonamento limitado aos 8 primeiros: numa lista longa,
-              // 30ms por item faria o último cartão entrar meio segundo
-              // depois — o oposto de parecer rápido. Do 9º em diante todos
-              // entram juntos, e ninguém percebe porque já estão fora da tela.
-              atraso={Math.min(posicao, 8) * 30}
-              orcamento={orcamento}
-              aoDuplicar={duplicar}
-              aoApagar={setAConfirmar}
-              aoTratar={tratar}
-              saiuDaFila={confirmando === orcamento.id}
-              ocupado={pendente}
-            />
-          ))}
-        </ul>
+        <div className="flex flex-col gap-4">
+          {(['precisa', 'aguardando', 'rascunhos'] as Grupo[]).map((grupo) => {
+            const doGrupo = filtrados.filter((o) => grupoDe(o) === grupo)
+            if (doGrupo.length === 0) return null
+
+            return (
+              <section key={grupo} className="flex flex-col gap-2">
+                <h2 className="text-[11px] font-bold tracking-[0.09em] text-tinta-meta uppercase">
+                  {TITULO_GRUPO[grupo]}{' '}
+                  <span className="text-tinta-suave/70">· {doGrupo.length}</span>
+                </h2>
+
+                <ul className="flex flex-col gap-2">
+                  {doGrupo.map((orcamento, posicao) => (
+                    <Cartao
+                      key={orcamento.id}
+                      // Escalonamento limitado aos 8 primeiros: numa lista longa,
+                      // 30ms por item faria o último cartão entrar meio segundo
+                      // depois — o oposto de parecer rápido. Do 9º em diante todos
+                      // entram juntos, e ninguém percebe porque já estão fora da tela.
+                      atraso={Math.min(posicao, 8) * 30}
+                      orcamento={orcamento}
+                      aoDuplicar={duplicar}
+                      aoApagar={setAConfirmar}
+                      aoTratar={tratar}
+                      saiuDaFila={confirmando === orcamento.id}
+                      ocupado={pendente}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
       )}
 
       <Dialogo
