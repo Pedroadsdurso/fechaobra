@@ -39,7 +39,9 @@ export function classesBotao({
 } = {}) {
   return cn(
     'inline-flex items-center justify-center gap-2 rounded-lg font-medium',
-    'transition-colors outline-none',
+    // fo-toque troca transition-colors: além da cor, encolhe 2,5% no toque.
+    // É o retorno tátil que falta no celular, onde não existe :hover.
+    'fo-toque outline-none',
     'focus-visible:ring-2 focus-visible:ring-marca focus-visible:ring-offset-2',
     'disabled:cursor-not-allowed disabled:opacity-50',
     VARIANTES[variante],

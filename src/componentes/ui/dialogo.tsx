@@ -43,7 +43,35 @@ export function Dialogo({
       primeiroCampo?.focus()
     }
 
-    if (!aberto && dialogo.open) dialogo.close()
+    if (!aberto && dialogo.open) {
+      /*
+        close() é imediato: o modal sumiria de estalo. Marcamos o elemento,
+        o CSS toca a saída, e só então fechamos de verdade.
+
+        O tempo limite é rede de segurança: se a animação não rodar — por
+        prefers-reduced-motion, que a encurta para 0.01ms, ou por qualquer
+        motivo em que animationend não dispare — o diálogo fecha assim mesmo.
+        Um modal que não fecha é pior do que um modal sem animação.
+      */
+      dialogo.setAttribute('data-fechando', '')
+
+      let encerrado = false
+      const encerrar = () => {
+        if (encerrado) return
+        encerrado = true
+        dialogo.removeAttribute('data-fechando')
+        if (dialogo.open) dialogo.close()
+      }
+
+      dialogo.addEventListener('animationend', encerrar, { once: true })
+      const rede = setTimeout(encerrar, 300)
+
+      return () => {
+        clearTimeout(rede)
+        dialogo.removeEventListener('animationend', encerrar)
+        encerrar()
+      }
+    }
   }, [aberto])
 
   useEffect(() => {

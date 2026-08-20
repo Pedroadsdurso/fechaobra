@@ -43,7 +43,7 @@ export function NavegacaoInferior() {
                   href={item.href}
                   aria-current={ativo ? 'page' : undefined}
                   className={cn(
-                    'flex min-h-14 flex-col items-center justify-center gap-1 transition-colors',
+                    'fo-toque flex min-h-14 flex-col items-center justify-center gap-1',
                     ativo ? 'text-tinta' : 'text-tinta-suave',
                   )}
                 >

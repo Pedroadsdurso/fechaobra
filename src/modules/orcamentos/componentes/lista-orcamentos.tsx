@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 
 import { IconeOrcamentos } from '@/componentes/layout/icones'
-import { Botao } from '@/componentes/ui/botao'
+import { Botao, classesBotao } from '@/componentes/ui/botao'
 import { Dialogo } from '@/componentes/ui/dialogo'
 import { cn, formatarMoeda } from '@/lib/utils'
 
@@ -68,12 +68,14 @@ function rotuloStatus(status: string) {
 
 function Cartao({
   orcamento,
+  atraso,
   aoDuplicar,
   aoApagar,
   aoTratar,
   saiuDaFila,
   ocupado,
 }: {
+  atraso: number
   orcamento: OrcamentoNaLista
   aoDuplicar: (id: string) => void
   aoApagar: (orcamento: OrcamentoNaLista) => void
@@ -115,7 +117,10 @@ function Cartao({
   // borda tracejada, e só oferece duas saídas — continuar ou sumir.
   if (orcamento.vazio) {
     return (
-      <li className="flex items-center gap-3 rounded-xl border border-dashed border-borda bg-superficie/60 px-4 py-3">
+      <li
+        className="fo-cartao flex items-center gap-3 rounded-xl border border-dashed border-borda bg-superficie/60 px-4 py-3"
+        style={{ animationDelay: `${atraso}ms` }}
+      >
         <div className="min-w-0 flex-1">
           <p className="text-sm text-tinta-suave">
             Rascunho nº {String(orcamento.numero).padStart(3, '0')} — vazio
@@ -125,8 +130,17 @@ function Cartao({
           </p>
         </div>
 
-        <Link href={`/painel/orcamentos/${orcamento.id}`}>
-          <Botao variante="secundario">Continuar</Botao>
+        {/*
+          Um <a> só, sem <button> dentro — mesmo defeito do botão do WhatsApp:
+          conteúdo interativo dentro de <a> é proibido pela especificação, e o
+          Safari deixa o <button> engolir o toque. Aqui custaria a abertura do
+          rascunho no iPhone. Ver a nota em dialogo-envio.tsx.
+        */}
+        <Link
+          href={`/painel/orcamentos/${orcamento.id}`}
+          className={classesBotao({ variante: 'secundario' })}
+        >
+          Continuar
         </Link>
 
         <Botao variante="perigo" onClick={() => aoApagar(orcamento)} disabled={ocupado}>
@@ -137,10 +151,13 @@ function Cartao({
   }
 
   return (
-    <li className="rounded-xl border border-borda bg-superficie">
+    <li
+      className="fo-cartao rounded-xl border border-borda bg-superficie"
+      style={{ animationDelay: `${atraso}ms` }}
+    >
       <Link
         href={`/painel/orcamentos/${orcamento.id}`}
-        className="block px-4 pt-3 pb-2 transition-colors hover:bg-fundo/60"
+        className="fo-toque block px-4 pt-3 pb-2 hover:bg-fundo/60"
       >
         <div className="flex items-center gap-2">
           <span
@@ -372,9 +389,14 @@ export function ListaOrcamentos({ orcamentos }: { orcamentos: OrcamentoNaLista[]
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {filtrados.map((orcamento) => (
+          {filtrados.map((orcamento, posicao) => (
             <Cartao
               key={orcamento.id}
+              // Escalonamento limitado aos 8 primeiros: numa lista longa,
+              // 30ms por item faria o último cartão entrar meio segundo
+              // depois — o oposto de parecer rápido. Do 9º em diante todos
+              // entram juntos, e ninguém percebe porque já estão fora da tela.
+              atraso={Math.min(posicao, 8) * 30}
               orcamento={orcamento}
               aoDuplicar={duplicar}
               aoApagar={setAConfirmar}
