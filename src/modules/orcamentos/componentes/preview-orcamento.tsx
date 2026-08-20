@@ -1,6 +1,6 @@
 'use client'
 
-import dynamic from 'next/dynamic'
+import { PDFViewer } from '@react-pdf/renderer'
 import { useEffect, useMemo, useState } from 'react'
 
 import { DocumentoOrcamento } from '@/modules/documento/documento-orcamento'
@@ -12,26 +12,17 @@ import type { RascunhoOrcamento } from '../tipos'
 
 import { BotaoBaixarPdf } from './botao-baixar-pdf'
 
-const PDFViewer = dynamic(() => import('@react-pdf/renderer').then((m) => m.PDFViewer), {
-  ssr: false,
-  loading: () => <Esqueleto />,
-})
-
 const ESPERA_REDESENHO = 800
-
-function Esqueleto() {
-  return (
-    <div className="flex h-full items-center justify-center bg-fundo">
-      <p className="text-sm text-tinta-suave">Montando o documento…</p>
-    </div>
-  )
-}
 
 /**
  * O PDF de verdade, montado a partir do estado vivo do editor.
  *
  * Não é uma simulação: passa pelo mesmo adaptador e pelos mesmos componentes
  * que geram o arquivo baixado. O que se vê aqui é o que o cliente recebe.
+ *
+ * Este módulo importa o react-pdf estaticamente e por isso PESA 449 KB gzip.
+ * Ele é carregado por `dynamic()` no editor — nunca por import estático — e só
+ * é montado onde está de fato visível. Ver a nota em editor-orcamento.tsx.
  */
 export function PreviewOrcamento({
   rascunho,

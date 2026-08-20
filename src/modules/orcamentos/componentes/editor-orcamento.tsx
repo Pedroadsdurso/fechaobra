@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { Alerta } from '@/componentes/ui/alerta'
 import { Botao } from '@/componentes/ui/botao'
@@ -30,8 +31,53 @@ import { DialogoBiblioteca } from './dialogo-biblioteca'
 import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
-import { PreviewOrcamento } from './preview-orcamento'
 import { SeletorCliente } from './seletor-cliente'
+
+/**
+ * O preview carrega o react-pdf inteiro: 449 KB gzip, 1,23 MB para o motor
+ * de JavaScript mastigar. Medido, era 88% de tudo o que esta rota baixava.
+ *
+ * `dynamic()` aqui é o que de fato adia esse peso. A versão anterior tinha um
+ * `dynamic()` só no PDFViewer, dentro do preview, enquanto o import estático
+ * de DocumentoOrcamento arrastava a biblioteca junto — parecia adiado e não
+ * era. O adiamento tem que estar na fronteira do módulo, não dentro dele.
+ */
+const PreviewOrcamento = dynamic(
+  () => import('./preview-orcamento').then((m) => m.PreviewOrcamento),
+  { ssr: false, loading: () => <EsqueletoPreview /> },
+)
+
+function EsqueletoPreview() {
+  return (
+    <div className="flex h-full items-center justify-center rounded-lg bg-fundo">
+      <p className="text-sm text-tinta-suave">Montando o documento…</p>
+    </div>
+  )
+}
+
+/**
+ * `hidden lg:block` esconde com CSS, mas o React monta assim mesmo — e o
+ * react-pdf renderiza o documento inteiro para uma tela que ninguém vê.
+ *
+ * Medido antes: dois preview montados ao mesmo tempo no celular (um no
+ * <dialog> fechado, que mantém os filhos no DOM, outro no aside escondido),
+ * os dois gerando blob a cada pausa da digitação. Metade do trabalho de PDF
+ * do editor era para descarte.
+ *
+ * getServerSnapshot devolve false: no servidor não há viewport, e o preview
+ * é ssr:false de qualquer jeito.
+ */
+function useEhDesktop() {
+  return useSyncExternalStore(
+    (aoMudar) => {
+      const consulta = window.matchMedia('(min-width: 1024px)')
+      consulta.addEventListener('change', aoMudar)
+      return () => consulta.removeEventListener('change', aoMudar)
+    },
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => false,
+  )
+}
 
 const ESPERA_AUTOSAVE = 1200
 
@@ -72,6 +118,7 @@ export function EditorOrcamento({
   const [previewAberto, setPreviewAberto] = useState(false)
   const [envio, setEnvio] = useState<{ token: string; reenvio: boolean } | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const ehDesktop = useEhDesktop()
 
   // Assinatura do que já está gravado. Sem isso o autosave dispararia a cada
   // render e reescreveria a tabela de itens à toa.
@@ -500,12 +547,20 @@ export function EditorOrcamento({
         titulo={`Orçamento nº ${String(rascunho.numero).padStart(3, '0')}`}
         descricao="É o documento que o cliente recebe."
       >
-        <div className="h-[70dvh]">{preview}</div>
+        {/* <dialog> fechado mantém os filhos no DOM: sem esta guarda, o
+            documento era renderizado para uma tela invisível. */}
+        <div className="h-[70dvh]">{previewAberto && !ehDesktop && preview}</div>
       </Dialogo>
     </div>
 
-      {/* Desktop: o documento acompanha a rolagem do editor. */}
-      <aside className="sticky top-6 hidden h-[calc(100dvh-6rem)] lg:block">{preview}</aside>
+      {/*
+        Desktop: o documento acompanha a rolagem do editor, exatamente como
+        antes. O `ehDesktop` não muda o que se vê aqui — só impede que este
+        preview seja montado no celular, onde ele está escondido por CSS.
+      */}
+      <aside className="sticky top-6 hidden h-[calc(100dvh-6rem)] lg:block">
+        {ehDesktop && preview}
+      </aside>
     </div>
   )
 }
