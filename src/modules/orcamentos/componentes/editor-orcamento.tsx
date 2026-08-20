@@ -9,7 +9,12 @@ import { Dialogo } from '@/componentes/ui/dialogo'
 import type { EmpresaDocumento } from '@/modules/documento/tipos'
 import type { Cliente } from '@/modules/clientes/tipos'
 
-import { buscarTextosPadrao, salvarItemNaBiblioteca, salvarRascunho } from '../acoes'
+import {
+  buscarTextosPadrao,
+  enviarOrcamento,
+  salvarItemNaBiblioteca,
+  salvarRascunho,
+} from '../acoes'
 import {
   avisosDePacote,
   dataDeValidade,
@@ -22,6 +27,7 @@ import { TIPOS_SERVICO, VALIDADE_PADRAO_DIAS } from '../constantes'
 import type { ItemBiblioteca, ItemEditor, Pacote, RascunhoOrcamento } from '../tipos'
 
 import { DialogoBiblioteca } from './dialogo-biblioteca'
+import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
 import { PreviewOrcamento } from './preview-orcamento'
@@ -61,6 +67,8 @@ export function EditorOrcamento({
   const [aviso, setAviso] = useState('')
   const [substituirTextos, setSubstituirTextos] = useState(false)
   const [previewAberto, setPreviewAberto] = useState(false)
+  const [envio, setEnvio] = useState<{ token: string; reenvio: boolean } | null>(null)
+  const [enviando, setEnviando] = useState(false)
 
   // Assinatura do que já está gravado. Sem isso o autosave dispararia a cada
   // render e reescreveria a tabela de itens à toa.
@@ -199,6 +207,30 @@ export function EditorOrcamento({
       pacotes: atual.pacotes.map((p) => ({ ...p, destaque: p.nivel === nivel })),
     }))
   }, [])
+
+  // ---- envio ---------------------------------------------------------------
+  async function enviar() {
+    setEnviando(true)
+    try {
+      // Força a gravação do que ainda não subiu: o cliente vai abrir o link em
+      // segundos, e um item digitado há meio segundo não pode ficar de fora.
+      await salvarRascunho(rascunho)
+      salvo.current = JSON.stringify(rascunho)
+
+      const resposta = await enviarOrcamento(rascunho.id)
+      if (!resposta.ok || !resposta.token) {
+        setAviso(resposta.erro ?? 'Não consegui enviar.')
+        return
+      }
+
+      setRascunho((atual) =>
+        atual.status === 'rascunho' ? { ...atual, status: 'enviado' } : atual,
+      )
+      setEnvio({ token: resposta.token, reenvio: Boolean(resposta.jaEstavaEnviado) })
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   // ---- validade ------------------------------------------------------------
   const dias = Number(rascunho.validadeDias) || VALIDADE_PADRAO_DIAS
@@ -373,10 +405,20 @@ export function EditorOrcamento({
         />
       </section>
 
-      {pendencias.length > 0 && (
+      {pendencias.length > 0 ? (
         <Alerta tom="aviso">
-          Rascunho salvo. Para finalizar falta {pendencias.join(' e ')}.
+          Rascunho salvo. Para enviar falta {pendencias.join(' e ')}.
         </Alerta>
+      ) : (
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 -mx-4 border-t border-borda bg-superficie px-4 py-3 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0">
+          <Botao type="button" tamanho="grande" larguraTotal onClick={enviar} disabled={enviando}>
+            {enviando
+              ? 'Preparando…'
+              : rascunho.status === 'rascunho'
+                ? 'Enviar orçamento'
+                : 'Mandar de novo'}
+          </Botao>
+        </div>
       )}
 
       <DialogoBiblioteca
@@ -397,6 +439,18 @@ export function EditorOrcamento({
           Ver prévia
         </Botao>
       </div>
+
+      {envio && (
+        <DialogoEnvio
+          aberto
+          aoFechar={() => setEnvio(null)}
+          rascunho={rascunho}
+          cliente={clienteSelecionado}
+          empresa={empresa}
+          token={envio.token}
+          reenvio={envio.reenvio}
+        />
+      )}
 
       <Dialogo
         aberto={previewAberto}

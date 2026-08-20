@@ -9,9 +9,18 @@ import { Botao } from '@/componentes/ui/botao'
 import { Dialogo } from '@/componentes/ui/dialogo'
 import { cn, formatarMoeda } from '@/lib/utils'
 
-import { apagarOrcamento, duplicarOrcamento } from '../acoes'
+import { apagarOrcamento, duplicarOrcamento, marcarComoTratado } from '../acoes'
 import { STATUS_ORCAMENTO } from '../constantes'
 import { estadoDeValidade, validadeImporta, type TomValidade } from '../estado-validade'
+import {
+  chamadaDeAcao,
+  ordenarPorUrgencia,
+  pedeContato,
+  tempoDecorrido,
+  urgenciaDe,
+  type Urgencia,
+} from '../fila-de-trabalho'
+import { linkWhatsApp, mensagemDeAcompanhamento, nomeDeTratamento } from '../mensagem-whatsapp'
 import type { OrcamentoNaLista } from '../consultas'
 
 import { BotaoNovoOrcamento } from './botao-novo-orcamento'
@@ -45,6 +54,14 @@ const TOM_STATUS: Record<string, string> = {
   expirado: 'bg-fundo text-tinta-suave',
 }
 
+const TOM_URGENCIA: Record<Urgencia, string> = {
+  aceito: 'bg-sucesso/10 text-sucesso',
+  'visualizado-parado': 'bg-atencao/15 text-atencao-forte',
+  'enviado-nao-aberto': 'bg-atencao/15 text-atencao-forte',
+  vencendo: 'bg-perigo/10 text-perigo',
+  normal: '',
+}
+
 function rotuloStatus(status: string) {
   return STATUS_ORCAMENTO.find((s) => s.valor === status)?.rotulo ?? status
 }
@@ -53,15 +70,45 @@ function Cartao({
   orcamento,
   aoDuplicar,
   aoApagar,
+  aoTratar,
+  saiuDaFila,
   ocupado,
 }: {
   orcamento: OrcamentoNaLista
   aoDuplicar: (id: string) => void
   aoApagar: (orcamento: OrcamentoNaLista) => void
+  aoTratar: (id: string, tratado: boolean) => void
+  /** true durante a janela de confirmação, antes de a lista reordenar. */
+  saiuDaFila: boolean
   ocupado: boolean
 }) {
   const validade = validadeImporta(orcamento.status)
     ? estadoDeValidade(orcamento.dataValidade)
+    : null
+
+  const urgencia = urgenciaDe(orcamento)
+  const chamada = chamadaDeAcao(orcamento)
+
+  // Tempo NO ESTADO, não a data. "visualizado há 4 dias" é uma tarefa;
+  // "visualizado" é só um rótulo.
+  const desdeQuando =
+    orcamento.status === 'aceito'
+      ? tempoDecorrido(orcamento.respondidoEm)
+      : orcamento.status === 'visualizado'
+        ? tempoDecorrido(orcamento.visualizadoEm ?? orcamento.atualizadoEm)
+        : orcamento.status === 'enviado'
+          ? tempoDecorrido(orcamento.enviadoEm)
+          : ''
+
+  const contato = pedeContato(orcamento)
+    ? linkWhatsApp(
+        orcamento.clienteTelefone,
+        mensagemDeAcompanhamento(
+          urgencia === 'normal' ? 'visualizado-parado' : urgencia,
+          nomeDeTratamento(orcamento.clienteNome).split(' ')[0] ?? '',
+          orcamento.numero,
+        ),
+      )
     : null
 
   // Rascunho vazio não é orçamento: é lixo de uma tentativa. Fica apagado, com
@@ -107,8 +154,9 @@ function Cartao({
           <span className="text-xs text-tinta-suave">
             nº {String(orcamento.numero).padStart(3, '0')}
           </span>
+          {desdeQuando && <span className="text-xs text-tinta-suave">{desdeQuando}</span>}
 
-          {validade && (
+          {validade && urgencia === 'normal' && (
             <span className={cn('ml-auto text-xs font-medium', TOM_VALIDADE[validade.tom])}>
               {validade.texto}
             </span>
@@ -130,11 +178,78 @@ function Cartao({
             {orcamento.quantidadeItens} {orcamento.quantidadeItens === 1 ? 'item' : 'itens'}
           </span>
         </p>
+
+        {saiuDaFila && (
+          <p className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-fundo px-2.5 py-1.5 text-xs font-medium text-tinta-suave">
+            <span>Saiu da fila</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                // O cartão inteiro é um link para o editor.
+                e.preventDefault()
+                e.stopPropagation()
+                aoTratar(orcamento.id, false)
+              }}
+              className="underline underline-offset-4 hover:text-tinta"
+            >
+              Desfazer
+            </button>
+          </p>
+        )}
+
+        {!saiuDaFila && chamada && (
+          <p
+            className={cn(
+              'mt-2 rounded-lg px-2.5 py-1.5 text-xs font-medium',
+              TOM_URGENCIA[urgencia],
+            )}
+          >
+            {chamada}
+          </p>
+        )}
+
+        {/* O prestador não pode descobrir isso na hora de emitir a nota. */}
+        {orcamento.enderecoDivergente && (
+          <p className="mt-2 rounded-lg bg-atencao/10 px-2.5 py-1.5 text-xs text-atencao-forte">
+            {nomeDeTratamento(orcamento.clienteNome).split(' ')[0] || 'O cliente'} confirmou um
+            endereço diferente do cadastrado: {orcamento.enderecoDivergente}
+          </p>
+        )}
       </Link>
 
       {/* Duplicar fica à vista, não dentro de menu: é a ação mais usada da
           tela — mesmo serviço, cliente diferente. */}
       <div className="flex gap-1 border-t border-borda px-2 py-1.5">
+        {/* O gesto seguinte a "visto há 4 dias" é cobrar retorno — e tem que
+            caber sem abrir o orçamento. */}
+        {contato && (
+          <a
+            href={contato}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-10 flex-1 items-center justify-center rounded-lg bg-marca px-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            WhatsApp
+          </a>
+        )}
+
+        {/*
+          Reversível a qualquer momento, não só na janela de segundos.
+          O desfazer imediato acima resolve o clique errado, mas some num
+          refresh — então o cartão de um aceito já tratado continua oferecendo
+          o caminho de volta, para sempre.
+        */}
+        {orcamento.status === 'aceito' && (
+          <button
+            type="button"
+            onClick={() => aoTratar(orcamento.id, !orcamento.tratadoEm)}
+            disabled={ocupado}
+            className="min-h-10 rounded-lg px-3 text-sm font-medium text-tinta transition-colors hover:bg-fundo disabled:opacity-40"
+          >
+            {orcamento.tratadoEm ? 'Voltar para a fila' : 'Já combinei'}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => aoDuplicar(orcamento.id)}
@@ -160,14 +275,16 @@ export function ListaOrcamentos({ orcamentos }: { orcamentos: OrcamentoNaLista[]
   const [busca, setBusca] = useState('')
   const [aConfirmar, setAConfirmar] = useState<OrcamentoNaLista | null>(null)
   const [pendente, iniciar] = useTransition()
+  const [confirmando, setConfirmando] = useState<string | null>(null)
   const router = useRouter()
 
   const filtrados = useMemo(() => {
+    const porUrgencia = ordenarPorUrgencia(orcamentos)
     const termo = normalizar(busca.trim())
-    if (!termo) return orcamentos
+    if (!termo) return porUrgencia
 
     const digitos = busca.replace(/\D/g, '')
-    return orcamentos.filter((o) => {
+    return porUrgencia.filter((o) => {
       const alvo = normalizar(`${o.clienteNome} ${o.titulo} ${o.tipoServicoRotulo}`)
       // Busca por número aceita "2", "02" e "002".
       const casaNumero = digitos.length > 0 && String(o.numero).padStart(3, '0').includes(digitos)
@@ -180,6 +297,32 @@ export function ListaOrcamentos({ orcamentos }: { orcamentos: OrcamentoNaLista[]
       const resposta = await duplicarOrcamento(id)
       // Abre a cópia direto: quem duplica quer editar agora, não voltar à lista.
       if (resposta.ok && resposta.id) router.push(`/painel/orcamentos/${resposta.id}`)
+    })
+  }
+
+  /**
+   * Marcar como tratado não reordena a lista na hora.
+   *
+   * O item sumindo no instante do toque não dá tempo de a pessoa registrar o
+   * que aconteceu — e se foi engano, ela nem sabe de onde desfazer. O cartão
+   * fica alguns segundos mostrando "Saiu da fila · Desfazer" e só então a
+   * lista se reorganiza.
+   */
+  function tratar(id: string, tratado: boolean) {
+    iniciar(async () => {
+      const resposta = await marcarComoTratado(id, tratado)
+      if (!resposta.ok) return
+
+      if (tratado) {
+        setConfirmando(id)
+        setTimeout(() => {
+          setConfirmando((atual) => (atual === id ? null : atual))
+          router.refresh()
+        }, 4000)
+      } else {
+        setConfirmando(null)
+        router.refresh()
+      }
     })
   }
 
@@ -235,6 +378,8 @@ export function ListaOrcamentos({ orcamentos }: { orcamentos: OrcamentoNaLista[]
               orcamento={orcamento}
               aoDuplicar={duplicar}
               aoApagar={setAConfirmar}
+              aoTratar={tratar}
+              saiuDaFila={confirmando === orcamento.id}
               ocupado={pendente}
             />
           ))}

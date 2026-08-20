@@ -6,6 +6,18 @@ import type { Database } from '@/lib/tipos-banco'
 /** Rotas que exigem sessão. Tudo o que começa com um destes prefixos. */
 const ROTAS_PROTEGIDAS = ['/painel', '/clientes', '/orcamentos', '/biblioteca', '/configuracoes']
 
+/**
+ * Rotas abertas que não dependem de sessão nenhuma.
+ *
+ * A página do orçamento público é aberta pelo cliente do prestador, no
+ * celular, muitas vezes no 4G. Validar token de sessão ali seria uma ida ao
+ * Supabase antes de qualquer byte sair — latência pura, para uma resposta que
+ * é sempre "não há sessão". O endpoint que registra visualização continua
+ * passando pelo fluxo normal, porque lá a sessão importa: é como se descobre
+ * que quem abriu é o próprio dono.
+ */
+const ROTAS_ABERTAS = ['/p/']
+
 /** Rotas de entrada: quem já está logado não deveria ficar aqui. */
 const ROTAS_DE_AUTENTICACAO = ['/entrar', '/cadastro']
 
@@ -19,6 +31,10 @@ const ROTAS_DE_AUTENTICACAO = ['/entrar', '/cadastro']
  */
 export async function atualizarSessao(request: NextRequest) {
   let resposta = NextResponse.next({ request })
+
+  if (ROTAS_ABERTAS.some((rota) => request.nextUrl.pathname.startsWith(rota))) {
+    return resposta
+  }
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

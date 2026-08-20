@@ -1,4 +1,11 @@
 import { Rect, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+// Importa o NÚCLEO do qrcode, não a entrada principal.
+//
+// `from 'qrcode'` resolve para lib/server.js, que arrasta os renderizadores de
+// PNG e SVG — e com eles `stream`, `zlib` e `pngjs`. Isso quebra o bundle no
+// navegador e no esbuild dos scripts. Daqui só vem a matriz de módulos, que é
+// tudo o que este rodapé precisa: quem desenha é o react-pdf.
+import { create as criarQr } from 'qrcode/lib/core/qrcode'
 
 import { CORES, ESP, FONTE, TAM } from '../tema'
 
@@ -27,19 +34,42 @@ const s = StyleSheet.create({
   pagina: { fontSize: TAM.micro, fontWeight: FONTE.media, color: CORES.textoSuave },
 })
 
-const MODULOS = 21
+const LADO = 30
 
 /**
- * Matriz de um QR de mentira: três marcadores de posição reais nos cantos e
- * área de dados preenchida por um hash determinístico, para o desenho ficar
- * igual a cada renderização.
+ * Matriz de um QR real, a partir da URL pública do orçamento.
  *
- * É PLACEHOLDER. Na Fase 2, quando o link público existir, isto vira um QR
- * de verdade apontando para /p/{token_publico} — o desenho já está no lugar
- * e no tamanho certos, é só trocar a fonte da matriz.
+ * Correção de erro em nível M: o papel vai ser dobrado, guardado no bolso e
+ * fotografado de lado — vale sacrificar um pouco de densidade para o código
+ * continuar lendo depois de amassado.
+ *
+ * A geração é síncrona e determinística, então roda dentro do render sem
+ * efeito colateral, igual no servidor e no navegador.
  */
-const MATRIZ: boolean[][] = (() => {
-  const m: boolean[][] = Array.from({ length: MODULOS }, () => Array(MODULOS).fill(false))
+function matrizDoQr(url: string): boolean[][] | null {
+  try {
+    const { modules } = criarQr(url, { errorCorrectionLevel: 'M' })
+    const lado = modules.size
+
+    return Array.from({ length: lado }, (_, y) =>
+      Array.from({ length: lado }, (_, x) => Boolean(modules.data[y * lado + x])),
+    )
+  } catch {
+    // URL absurdamente longa ou inválida: melhor rodapé sem QR do que documento
+    // que não renderiza.
+    return null
+  }
+}
+
+/**
+ * Marcador de lugar para quando não há URL — os mocks de desenvolvimento.
+ * Tem cara de QR sem ser um: três marcadores de posição e ruído determinístico.
+ */
+const MODULOS_FALSOS = 21
+const MATRIZ_FALSA: boolean[][] = (() => {
+  const m: boolean[][] = Array.from({ length: MODULOS_FALSOS }, () =>
+    Array(MODULOS_FALSOS).fill(false),
+  )
 
   const marcador = (ox: number, oy: number) => {
     for (let y = 0; y < 7; y++) {
@@ -52,31 +82,34 @@ const MATRIZ: boolean[][] = (() => {
   }
 
   marcador(0, 0)
-  marcador(MODULOS - 7, 0)
-  marcador(0, MODULOS - 7)
+  marcador(MODULOS_FALSOS - 7, 0)
+  marcador(0, MODULOS_FALSOS - 7)
 
   const dentroDeMarcador = (x: number, y: number) =>
-    (x < 8 && y < 8) || (x >= MODULOS - 8 && y < 8) || (x < 8 && y >= MODULOS - 8)
+    (x < 8 && y < 8) ||
+    (x >= MODULOS_FALSOS - 8 && y < 8) ||
+    (x < 8 && y >= MODULOS_FALSOS - 8)
 
-  for (let y = 0; y < MODULOS; y++) {
-    for (let x = 0; x < MODULOS; x++) {
+  for (let y = 0; y < MODULOS_FALSOS; y++) {
+    for (let x = 0; x < MODULOS_FALSOS; x++) {
       if (dentroDeMarcador(x, y)) continue
-      m[y][x] = ((x * 73 + y * 151 + x * y * 17) % 7) < 3
+      m[y][x] = (x * 73 + y * 151 + x * y * 17) % 7 < 3
     }
   }
 
   return m
 })()
 
-const LADO = 30
+function Qr({ cor, url }: { cor: string; url?: string }) {
+  const matriz = url ? (matrizDoQr(url) ?? MATRIZ_FALSA) : MATRIZ_FALSA
+  const modulos = matriz.length
 
-function QrPlaceholder({ cor }: { cor: string }) {
   return (
-    <Svg width={LADO} height={LADO} viewBox={`0 0 ${MODULOS} ${MODULOS}`}>
-      {MATRIZ.flatMap((linha, y) =>
+    <Svg width={LADO} height={LADO} viewBox={`0 0 ${modulos} ${modulos}`}>
+      {matriz.flatMap((linha, y) =>
         linha.map((ligado, x) =>
           ligado ? (
-            <Rect key={`${x}-${y}`} x={x} y={y} width={1.02} height={1.02} fill={cor} />
+            <Rect key={`${x}-${y}`} x={x} y={y} width={1.04} height={1.04} fill={cor} />
           ) : null,
         ),
       )}
@@ -89,10 +122,18 @@ function QrPlaceholder({ cor }: { cor: string }) {
  * O `render` do Text recebe pageNumber e totalPages do próprio react-pdf, que
  * só sabe o total depois de paginar o documento inteiro.
  */
-export function Rodape({ nomeEmpresa, cor }: { nomeEmpresa: string; cor: string }) {
+export function Rodape({
+  nomeEmpresa,
+  cor,
+  urlPublica,
+}: {
+  nomeEmpresa: string
+  cor: string
+  urlPublica?: string
+}) {
   return (
     <View style={s.rodape} fixed>
-      <QrPlaceholder cor={cor} />
+      <Qr cor={cor} url={urlPublica} />
 
       <View style={s.chamada}>
         <Text style={s.chamadaTitulo}>Aceite pelo celular</Text>

@@ -212,11 +212,13 @@ export type Database = {
           cliente_id: string | null
           criado_em: string
           data_validade: string | null
+          enviado_em: string | null
           id: string
           local_servico: string | null
           numero: number
           observacoes: string | null
           prazo_execucao: string | null
+          respondido_em: string | null
           snapshot_aceite: Json | null
           status: string
           texto_condicoes_pagamento: string | null
@@ -226,6 +228,7 @@ export type Database = {
           tipo_servico: string | null
           titulo: string
           token_publico: string
+          tratado_em: string | null
           user_id: string
           validade_dias: number
         }
@@ -234,11 +237,13 @@ export type Database = {
           cliente_id?: string | null
           criado_em?: string
           data_validade?: string | null
+          enviado_em?: string | null
           id?: string
           local_servico?: string | null
           numero: number
           observacoes?: string | null
           prazo_execucao?: string | null
+          respondido_em?: string | null
           snapshot_aceite?: Json | null
           status?: string
           texto_condicoes_pagamento?: string | null
@@ -248,6 +253,7 @@ export type Database = {
           tipo_servico?: string | null
           titulo?: string
           token_publico?: string
+          tratado_em?: string | null
           user_id: string
           validade_dias?: number
         }
@@ -256,11 +262,13 @@ export type Database = {
           cliente_id?: string | null
           criado_em?: string
           data_validade?: string | null
+          enviado_em?: string | null
           id?: string
           local_servico?: string | null
           numero?: number
           observacoes?: string | null
           prazo_execucao?: string | null
+          respondido_em?: string | null
           snapshot_aceite?: Json | null
           status?: string
           texto_condicoes_pagamento?: string | null
@@ -270,6 +278,7 @@ export type Database = {
           tipo_servico?: string | null
           titulo?: string
           token_publico?: string
+          tratado_em?: string | null
           user_id?: string
           validade_dias?: number
         }

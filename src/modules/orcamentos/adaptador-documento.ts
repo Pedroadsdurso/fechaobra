@@ -27,10 +27,18 @@ export function paraDocumento({
   rascunho,
   cliente,
   empresa,
+  urlPublica,
 }: {
   rascunho: RascunhoOrcamento
   cliente: Cliente | null
   empresa: EmpresaDocumento
+  /**
+   * Link público do orçamento. Vira o QR do rodapé.
+   *
+   * Chega de fora porque quem sabe montá-la é o servidor (lê o token do banco)
+   * — o adaptador continua sendo função pura, sem consultar nada.
+   */
+  urlPublica?: string
 }): OrcamentoDocumento {
   const dias = Number(rascunho.validadeDias) || VALIDADE_PADRAO_DIAS
 
@@ -90,5 +98,6 @@ export function paraDocumento({
     textoGarantia: rascunho.textoGarantia,
     textoCondicoesPagamento: rascunho.textoCondicoesPagamento,
     observacoes: rascunho.observacoes.trim() || undefined,
+    urlPublica,
   }
 }

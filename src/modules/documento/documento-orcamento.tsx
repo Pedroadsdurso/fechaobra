@@ -88,7 +88,11 @@ export function DocumentoOrcamento({
         <Galeria fotos={orcamento.fotos} cor={cor} />
         <Assinatura orcamento={orcamento} cor={cor} />
 
-        <Rodape nomeEmpresa={orcamento.empresa.nome} cor={cor} />
+        <Rodape
+          nomeEmpresa={orcamento.empresa.nome}
+          cor={cor}
+          urlPublica={orcamento.urlPublica}
+        />
       </Page>
     </Document>
   )

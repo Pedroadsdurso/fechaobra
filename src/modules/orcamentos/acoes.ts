@@ -386,3 +386,100 @@ export async function duplicarOrcamento(id: string): Promise<{ ok: boolean; id?:
   revalidatePath('/painel/orcamentos')
   return { ok: true, id: novo.id }
 }
+
+/**
+ * Envia o orçamento: o gesto que faltava no produto.
+ *
+ * Até aqui o status nunca saía de 'rascunho'. Enviar é o que separa "estou
+ * montando" de "está na mão do cliente" — e é o que faz a lista virar fila de
+ * trabalho em vez de arquivo.
+ *
+ * O token não é gerado aqui: a coluna tem default gen_random_uuid(), então
+ * toda linha já nasce com um. Isto só o lê. Token vindo do banco, nunca de
+ * nada que o cliente mande.
+ */
+export async function enviarOrcamento(id: string): Promise<{
+  ok: boolean
+  erro?: string
+  token?: string
+  jaEstavaEnviado?: boolean
+}> {
+  const { supabase, user } = await exigirUsuario()
+
+  const { data: orcamento } = await supabase
+    .from('orcamentos')
+    .select('id, cliente_id, status, token_publico, enviado_em')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!orcamento) return { ok: false, erro: 'Orçamento não encontrado.' }
+  if (!orcamento.cliente_id) return { ok: false, erro: 'Escolha o cliente antes de enviar.' }
+
+  const { count } = await supabase
+    .from('orcamento_itens')
+    .select('*', { count: 'exact', head: true })
+    .eq('orcamento_id', id)
+
+  if (!count) return { ok: false, erro: 'Inclua ao menos um item antes de enviar.' }
+
+  // Reenviar não reseta o histórico: se o cliente já abriu ou já respondeu,
+  // voltar o status para 'enviado' apagaria a informação mais valiosa da tela.
+  const jaRespondeu = orcamento.status === 'aceito' || orcamento.status === 'recusado'
+  const jaAbriu = orcamento.status === 'visualizado'
+
+  const { error } = await supabase
+    .from('orcamentos')
+    .update({
+      status: jaRespondeu || jaAbriu ? orcamento.status : 'enviado',
+      // A data do PRIMEIRO envio é a que interessa para cobrar retorno.
+      enviado_em: orcamento.enviado_em ?? new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { ok: false, erro: 'Não foi possível marcar como enviado.' }
+
+  revalidatePath('/painel/orcamentos')
+  revalidatePath(`/painel/orcamentos/${id}`)
+
+  return {
+    ok: true,
+    token: orcamento.token_publico,
+    jaEstavaEnviado: Boolean(orcamento.enviado_em),
+  }
+}
+
+/**
+ * Tira (ou devolve) um orçamento aceito da fila de trabalho.
+ *
+ * Não mexe no status: o orçamento continua 'aceito'. `tratado_em` responde
+ * só à pergunta interna "já combinei o início com essa pessoa?", e é isso que
+ * decide se ele aparece no topo da lista.
+ *
+ * Reversível a qualquer momento, de propósito. O desfazer imediato no cartão
+ * resolve o clique errado, mas não sobrevive a um refresh — então o estado
+ * tratado nunca é definitivo: o cartão sempre oferece o caminho de volta.
+ */
+export async function marcarComoTratado(
+  id: string,
+  tratado: boolean,
+): Promise<{ ok: boolean; erro?: string }> {
+  const { supabase, user } = await exigirUsuario()
+
+  const { error } = await supabase
+    .from('orcamentos')
+    .update({ tratado_em: tratado ? new Date().toISOString() : null })
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { ok: false, erro: 'Não foi possível atualizar.' }
+
+  // Sem revalidatePath aqui, de propósito.
+  //
+  // Ele revalida a rota atual assim que a action volta, e a lista se
+  // reordenaria no mesmo instante do toque — engolindo a janela de "Saiu da
+  // fila · Desfazer" antes de a pessoa ler. Quem decide a hora de recarregar
+  // é a tela, que sabe quando a confirmação terminou.
+  return { ok: true }
+}

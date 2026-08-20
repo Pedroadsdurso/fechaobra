@@ -76,4 +76,9 @@ export type OrcamentoDocumento = {
   textoGarantia: string
   textoCondicoesPagamento: string
   observacoes?: string
+  /**
+   * URL pública do orçamento. Vira o QR do rodapé.
+   * Sem ela, o rodapé desenha o marcador de lugar — é o caso dos mocks.
+   */
+  urlPublica?: string
 }

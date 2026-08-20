@@ -18,7 +18,7 @@ export default async function PaginaOrcamentos() {
           <p className="mt-1 text-sm text-tinta-suave">
             {orcamentos.length === 0
               ? 'Comece pelo primeiro.'
-              : `${reais} ${reais === 1 ? 'orçamento' : 'orçamentos'}, do mais recente para o mais antigo.`}
+              : `${reais} ${reais === 1 ? 'orçamento' : 'orçamentos'}. O que precisa de você vem primeiro.`}
           </p>
         </div>
 

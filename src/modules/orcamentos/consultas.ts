@@ -172,40 +172,63 @@ export type OrcamentoNaLista = {
   status: StatusOrcamento
   dataValidade: string | null
   atualizadoEm: string
+  enviadoEm: string | null
+  respondidoEm: string | null
+  /** Quando o prestador marcou que já deu andamento. Nulo = ainda na fila. */
+  tratadoEm: string | null
+  /** Quando o cliente abriu pela primeira vez. Nulo se nunca abriu. */
+  visualizadoEm: string | null
   clienteNome: string
+  clienteTelefone: string
   total: number
   quantidadeItens: number
   /** Sem cliente e sem item: rascunho que nunca virou nada. */
   vazio: boolean
+  /**
+   * Endereço que o cliente informou no aceite, quando diferente do cadastro.
+   * Nulo quando bate ou quando não houve aceite.
+   */
+  enderecoDivergente: string | null
 }
 
 /**
  * A lista da tela de trabalho.
  *
- * Ordenada por `atualizado_em`, não por número: quem abre esta tela quer ver o
- * que mexeu por último e o que precisa de ação, não um livro-razão em ordem
- * cronológica de emissão.
+ * Traz o que responde "o que eu faço agora": além do estado, QUANDO ele
+ * começou. "visualizado" é status; "visualizado há 4 dias" é uma tarefa.
  *
- * Os totais vêm de uma segunda consulta que traz os itens de todos os
- * orçamentos de uma vez, somados aqui. PostgREST não faz SUM agrupado sem uma
- * view, e criar uma view para isso seria mais schema do que o problema pede
- * nesta escala. Se a lista passar de alguns milhares de linhas, aí vale.
+ * Os agregados vêm em consultas separadas e são casados aqui. PostgREST não
+ * faz SUM agrupado nem "último evento por grupo" sem uma view, e criar views
+ * para isso nesta escala seria mais schema do que o problema pede.
  */
 export async function listarOrcamentos(): Promise<OrcamentoNaLista[]> {
   const supabase = await criarClienteServidor()
 
   const { data: orcamentos } = await supabase
     .from('orcamentos')
-    .select('id, numero, titulo, tipo_servico, status, data_validade, atualizado_em, clientes ( nome )')
+    .select(
+      `id, numero, titulo, tipo_servico, status, data_validade, atualizado_em,
+       enviado_em, respondido_em, tratado_em, snapshot_aceite,
+       clientes ( nome, telefone, endereco )`,
+    )
     .order('atualizado_em', { ascending: false })
 
   if (!orcamentos || orcamentos.length === 0) return []
 
   const ids = orcamentos.map((o) => o.id)
-  const { data: itens } = await supabase
-    .from('orcamento_itens')
-    .select('orcamento_id, quantidade, valor_unitario')
-    .in('orcamento_id', ids)
+
+  const [{ data: itens }, { data: eventos }] = await Promise.all([
+    supabase
+      .from('orcamento_itens')
+      .select('orcamento_id, quantidade, valor_unitario')
+      .in('orcamento_id', ids),
+    supabase
+      .from('eventos_orcamento')
+      .select('orcamento_id, tipo, criado_em')
+      .in('orcamento_id', ids)
+      .eq('tipo', 'visualizado')
+      .order('criado_em', { ascending: true }),
+  ])
 
   const porOrcamento = new Map<string, { total: number; quantidade: number }>()
   for (const item of itens ?? []) {
@@ -215,24 +238,48 @@ export async function listarOrcamentos(): Promise<OrcamentoNaLista[]> {
     porOrcamento.set(item.orcamento_id, atual)
   }
 
+  // Ordenado por criado_em ascendente, então o primeiro que entra no mapa é a
+  // PRIMEIRA visualização — que é a que interessa para contar o tempo parado.
+  const primeiraVisualizacao = new Map<string, string>()
+  for (const evento of eventos ?? []) {
+    if (!primeiraVisualizacao.has(evento.orcamento_id)) {
+      primeiraVisualizacao.set(evento.orcamento_id, evento.criado_em)
+    }
+  }
+
   return orcamentos.map((o) => {
-    const bruto = o as unknown as { clientes: { nome: string } | { nome: string }[] | null }
+    const bruto = o as unknown as {
+      clientes: { nome: string; telefone: string | null; endereco: string | null } | null
+      snapshot_aceite: { aceite?: { endereco?: string | null } } | null
+    }
     const cliente = Array.isArray(bruto.clientes) ? bruto.clientes[0] : bruto.clientes
     const agregado = porOrcamento.get(o.id) ?? { total: 0, quantidade: 0 }
+
+    // O que o cliente informou no aceite pode não ser o que estava no cadastro.
+    // O prestador precisa saber ANTES de emitir a nota, não na hora.
+    const enderecoAceite = bruto.snapshot_aceite?.aceite?.endereco?.trim() || ''
+    const enderecoCadastro = cliente?.endereco?.trim() || ''
+    const enderecoDivergente =
+      enderecoAceite && enderecoAceite !== enderecoCadastro ? enderecoAceite : null
 
     return {
       id: o.id,
       numero: o.numero,
       titulo: o.titulo ?? '',
-      tipoServicoRotulo:
-        TIPOS_SERVICO.find((t) => t.valor === o.tipo_servico)?.rotulo ?? '',
+      tipoServicoRotulo: TIPOS_SERVICO.find((t) => t.valor === o.tipo_servico)?.rotulo ?? '',
       status: o.status as StatusOrcamento,
       dataValidade: o.data_validade,
       atualizadoEm: o.atualizado_em,
+      enviadoEm: o.enviado_em,
+      respondidoEm: o.respondido_em,
+      tratadoEm: o.tratado_em,
+      visualizadoEm: primeiraVisualizacao.get(o.id) ?? null,
       clienteNome: cliente?.nome ?? '',
+      clienteTelefone: cliente?.telefone ?? '',
       total: agregado.total,
       quantidadeItens: agregado.quantidade,
       vazio: !cliente && agregado.quantidade === 0,
+      enderecoDivergente,
     }
   })
 }

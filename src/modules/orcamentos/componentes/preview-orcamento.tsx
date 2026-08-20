@@ -3,7 +3,6 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useState } from 'react'
 
-import { Botao } from '@/componentes/ui/botao'
 import { DocumentoOrcamento } from '@/modules/documento/documento-orcamento'
 import type { EmpresaDocumento } from '@/modules/documento/tipos'
 import type { Cliente } from '@/modules/clientes/tipos'
@@ -11,15 +10,12 @@ import type { Cliente } from '@/modules/clientes/tipos'
 import { paraDocumento } from '../adaptador-documento'
 import type { RascunhoOrcamento } from '../tipos'
 
+import { BotaoBaixarPdf } from './botao-baixar-pdf'
+
 const PDFViewer = dynamic(() => import('@react-pdf/renderer').then((m) => m.PDFViewer), {
   ssr: false,
   loading: () => <Esqueleto />,
 })
-
-const PDFDownloadLink = dynamic(
-  () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
-  { ssr: false },
-)
 
 const ESPERA_REDESENHO = 800
 
@@ -29,17 +25,6 @@ function Esqueleto() {
       <p className="text-sm text-tinta-suave">Montando o documento…</p>
     </div>
   )
-}
-
-function nomeArquivo(numero: number, empresa: string) {
-  const limpo = empresa
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase()
-
-  return `orcamento-${String(numero).padStart(3, '0')}-${limpo || 'fechaobra'}.pdf`
 }
 
 /**
@@ -76,20 +61,12 @@ export function PreviewOrcamento({
     return <DocumentoOrcamento orcamento={paraDocumento(dados)} />
   }, [estavel])
 
-  const arquivo = nomeArquivo(rascunho.numero, empresa.nome)
-
   return (
     <div className="flex h-full flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-tinta-suave">Prévia do PDF</p>
 
-        <PDFDownloadLink key={estavel} document={documento} fileName={arquivo}>
-          {({ loading }) => (
-            <Botao type="button" disabled={loading}>
-              {loading ? 'Gerando…' : 'Baixar PDF'}
-            </Botao>
-          )}
-        </PDFDownloadLink>
+        <BotaoBaixarPdf rascunho={rascunho} cliente={cliente} empresa={empresa} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-borda bg-fundo">
