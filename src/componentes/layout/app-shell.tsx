@@ -38,7 +38,7 @@ export function AppShell({
 
       <main className="md:pl-60">
         {/* pb generoso no celular para o conteúdo não ficar sob a barra inferior */}
-        <div className="mx-auto w-full max-w-5xl px-4 pt-5 pb-28 sm:px-6 md:pt-8 md:pb-10">
+        <div className="mx-auto w-full max-w-6xl px-4 pt-5 pb-28 sm:px-6 md:pt-8 md:pb-10">
           {children}
         </div>
       </main>

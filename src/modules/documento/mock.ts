@@ -71,7 +71,7 @@ export const MOCK_COMPLETO: OrcamentoDocumento = {
     responsavel: 'José Antônio da Silva',
     telefone: '(11) 98765-4321',
     email: 'contato@silvaefilhos.com.br',
-    cnpjCpf: '18.472.905/0001-64',
+    cnpjCpf: '11.222.333/0001-81',
     endereco: 'Rua das Palmeiras, 1.482 — Vila Madalena, São Paulo/SP',
     logoUrl: '/mock/logo.png',
   },
@@ -154,7 +154,7 @@ export const MOCK_SIMPLES: OrcamentoDocumento = {
     nome: 'Reformas Andrade',
     responsavel: 'Carlos Andrade',
     telefone: '(11) 96331-2077',
-    cnpjCpf: '482.910.338-70',
+    cnpjCpf: '529.982.247-25',
   },
   cliente: {
     nome: 'Roberto Tanaka',

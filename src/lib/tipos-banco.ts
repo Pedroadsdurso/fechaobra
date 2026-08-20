@@ -165,6 +165,47 @@ export type Database = {
           },
         ]
       }
+      orcamento_pacotes: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          descricao: string
+          destaque: boolean
+          id: string
+          nivel: string
+          orcamento_id: string
+          rotulo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string
+          destaque?: boolean
+          id?: string
+          nivel: string
+          orcamento_id: string
+          rotulo?: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string
+          destaque?: boolean
+          id?: string
+          nivel?: string
+          orcamento_id?: string
+          rotulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_pacotes_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "orcamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orcamentos: {
         Row: {
           atualizado_em: string

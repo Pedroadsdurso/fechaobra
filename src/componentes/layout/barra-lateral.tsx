@@ -6,11 +6,12 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 import { IconeSair } from './icones'
-import { ITENS_NAVEGACAO } from './navegacao'
+import { hrefAtivo, ITENS_NAVEGACAO } from './navegacao'
 
 /** Barra lateral: só aparece de md (768px) para cima. */
 export function BarraLateral({ nomeEmpresa, email }: { nomeEmpresa: string; email: string }) {
   const caminho = usePathname()
+  const ativoAgora = hrefAtivo(caminho)
 
   return (
     <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-60 md:flex-col md:border-r md:border-borda md:bg-superficie">
@@ -22,7 +23,7 @@ export function BarraLateral({ nomeEmpresa, email }: { nomeEmpresa: string; emai
 
       <nav className="flex-1 space-y-0.5 p-3" aria-label="Navegação principal">
         {ITENS_NAVEGACAO.map((item) => {
-          const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`)
+          const ativo = ativoAgora === item.href
           const Icone = item.icone
 
           if (item.emBreve) {

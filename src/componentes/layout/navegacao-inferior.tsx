@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation'
 
 import { cn } from '@/lib/utils'
 
-import { ITENS_NAVEGACAO } from './navegacao'
+import { hrefAtivo, ITENS_NAVEGACAO } from './navegacao'
 
 /** Navegação inferior: o padrão no celular, que é onde o app vive. */
 export function NavegacaoInferior() {
   const caminho = usePathname()
+  const ativoAgora = hrefAtivo(caminho)
 
   return (
     <nav
@@ -18,7 +19,7 @@ export function NavegacaoInferior() {
     >
       <ul className="flex">
         {ITENS_NAVEGACAO.map((item) => {
-          const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`)
+          const ativo = ativoAgora === item.href
           const Icone = item.icone
 
           const conteudo = (

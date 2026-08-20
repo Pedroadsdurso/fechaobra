@@ -53,3 +53,43 @@ export const PACOTES = [
 export const UNIDADES = ['un', 'm', 'm²', 'm³', 'kg', 'sc', 'lt', 'cx', 'pç', 'h', 'dia', 'vb']
 
 export const VALIDADE_PADRAO_DIAS = 15
+
+/**
+ * Rótulo e frase de partida de cada pacote.
+ *
+ * Quem lê isto é o cliente final decidindo quanto gastar, não o prestador. Por
+ * isso cada frase diz o que aquele nível ENTREGA A MAIS — nunca o que falta no
+ * nível de baixo. Cliente que sente que está sendo empurrado para cima trava;
+ * cliente que entende o que ganha, decide.
+ *
+ * O Essencial abre dizendo que a mão de obra é a mesma nas três opções: sem
+ * isso, "mais barato" é lido como "serviço pior", e a comparação inteira
+ * desanda. O Recomendado justifica com durabilidade, que é o argumento que o
+ * dono da obra reconhece — e não com "vale a pena investir mais".
+ *
+ * Tudo isso é ponto de partida editável: quem conhece o próprio cliente é o
+ * prestador, e a frase dele sempre vai ser melhor que a nossa.
+ */
+export const PACOTES_PADRAO: Record<
+  (typeof PACOTES)[number]['valor'],
+  { rotulo: string; descricao: string }
+> = {
+  essencial: {
+    rotulo: 'Essencial',
+    descricao:
+      'Entrega o serviço pronto e funcionando, com material de linha padrão. A mão de obra e o cuidado da execução são os mesmos das três opções.',
+  },
+  recomendado: {
+    rotulo: 'Recomendado',
+    descricao:
+      'Acrescenta os pontos que mais pesam na durabilidade e no acabamento — justamente onde economizar costuma custar caro depois. É o que indico para a maioria das obras deste tipo.',
+  },
+  completo: {
+    rotulo: 'Completo',
+    descricao:
+      'Resolve junto o que normalmente vira uma segunda obra meses adiante. Você passa a usar o espaço sem pendência e sem precisar me chamar de volta.',
+  },
+}
+
+/** Nível que nasce em destaque. É o do meio, por ancoragem. */
+export const PACOTE_DESTAQUE_PADRAO = 'recomendado' as const

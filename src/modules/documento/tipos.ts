@@ -44,6 +44,11 @@ export type PacoteDocumento = {
   resumo: string
   inclui: string[]
   valor: number
+  /**
+   * Qual pacote recebe o destaque visual. Opcional: sem ele, o documento cai
+   * no comportamento antigo de destacar o "recomendado".
+   */
+  destaque?: boolean
 }
 
 export type FotoDocumento = {

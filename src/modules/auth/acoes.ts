@@ -62,7 +62,10 @@ export async function cadastrar(
     return { aviso: 'Enviamos um link de confirmação para o seu e-mail. Abra para ativar a conta.' }
   }
 
-  redirect(destinoSeguro(dados.get('proximo')))
+  // Onboarding: quem acabou de criar a conta vai direto montar a marca. É a
+  // tela que faz o orçamento parecer de empresa, e o melhor momento de pedir
+  // esses dados é agora, não quando ele estiver com pressa no meio de uma obra.
+  redirect(dados.get('proximo') ? destinoSeguro(dados.get('proximo')) : '/painel/marca')
 }
 
 export async function entrar(

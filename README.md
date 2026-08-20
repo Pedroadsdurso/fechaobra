@@ -79,6 +79,37 @@ virar imagem, este comando falha com código 1.
   Fechar a aba no meio do cadastro não deixa conta órfã.
 - **RLS em todas as tabelas**, `anon` sem nenhuma permissão. A leitura pública por
   `token_publico` é Fase 2, via route handler com service role — não abrindo RLS.
+- **Cliente mínimo: só o nome é obrigatório.** Telefone, e-mail e endereço são
+  opcionais no cadastro. O prestador está no canteiro e precisa emitir o
+  orçamento agora — exigir dados que ele não tem em mãos trava o fluxo.
+
+- **`snapshot_aceite` (jsonb) é onde os dados do cliente chegam de verdade.**
+  Na Fase 3, o aceite pelo link público pede nome completo, CPF e endereço
+  **depois** do clique em "Aceitar", nunca antes: formulário na frente do botão
+  derruba a conversão. Esses dados são exatamente os que faltam para emitir
+  contrato e recibo depois, ficam congelados em `snapshot_aceite` como prova do
+  que foi aceito, e **enriquecem a linha correspondente em `clientes`** — o
+  cadastro que começou como só um nome se completa sozinho, pelas mãos de quem
+  tem a informação correta. Por isso o cadastro de cliente é propositalmente
+  frouxo: ele é um rascunho até o aceite.
+
+- **Pacotes: valor derivado, texto gravado.** O valor de cada nível sai da soma
+  acumulada dos itens marcados nele (`orcamento_itens.pacote`); rótulo, frase e
+  destaque ficam em `orcamento_pacotes` (migration 0003). Três números
+  crescentes sem justificativa empurram o cliente para o mais barato — a frase
+  é o que sustenta a ancoragem. Nível cujo valor repete o anterior é filtrado
+  pelo adaptador e não chega ao papel: duas opções boas convencem mais que três
+  com uma repetida.
+
+  **Pendente para a Etapa E:** ao DUPLICAR um orçamento, copiar as linhas de
+  `orcamento_pacotes` apenas se os pacotes estavam em uso na origem (itens
+  espalhados em mais de um nível). Duplicar sempre faria o novo orçamento
+  nascer carregando texto que ninguém vai ver.
+
+- **Nunca usar `toISOString()` para derivar data local** — em UTC−3 qualquer
+  horário após 21h vira o dia seguinte. Use `dataLocalISO`/`dataLocalEmDias`
+  de `lib/utils`.
+
 - **Sem shadcn/ui**: o design é próprio, os componentes vivem em `src/componentes`.
 - **Nenhum `letterSpacing` no documento.** O react-pdf posiciona glifo a glifo,
   e o extrator do leitor lê isso como espaço: "O QUE ESTÁ INCLUSO" saía do

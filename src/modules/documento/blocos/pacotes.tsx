@@ -77,7 +77,7 @@ export function Pacotes({ pacotes, cor }: { pacotes: PacoteDocumento[]; cor: str
 
       <View style={s.linha}>
         {pacotes.map((pacote) => {
-          const destacado = pacote.nome === 'recomendado'
+          const destacado = pacote.destaque ?? pacote.nome === 'recomendado'
 
           return (
             <View
@@ -86,7 +86,7 @@ export function Pacotes({ pacotes, cor }: { pacotes: PacoteDocumento[]; cor: str
             >
               {destacado && (
                 <View style={[s.selo, { backgroundColor: cor }]}>
-                  <Text style={s.seloTexto}>Recomendado</Text>
+                  <Text style={s.seloTexto}>Minha indicação</Text>
                 </View>
               )}
 

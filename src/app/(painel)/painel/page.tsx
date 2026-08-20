@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { IconeOrcamentos } from '@/componentes/layout/icones'
-import { Botao } from '@/componentes/ui/botao'
+import { BotaoNovoOrcamento } from '@/modules/orcamentos/componentes/botao-novo-orcamento'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
 export const metadata: Metadata = { title: 'Painel' }
@@ -15,11 +15,15 @@ export default async function PaginaPainel() {
 
   const { data: perfil } = await supabase
     .from('perfis')
-    .select('nome_empresa, proximo_numero')
+    .select('nome_empresa, proximo_numero, responsavel, telefone, cnpj_cpf, logo_url')
     .eq('user_id', user!.id)
     .maybeSingle()
 
   const nomeEmpresa = perfil?.nome_empresa?.trim()
+
+  // Faltando qualquer um destes, o cabeçalho do PDF sai pobre. Vale o empurrão.
+  const marcaIncompleta =
+    !perfil?.responsavel || !perfil?.telefone || !perfil?.cnpj_cpf || !perfil?.logo_url
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,7 +36,25 @@ export default async function PaginaPainel() {
         </p>
       </div>
 
-      {/* Estado vazio — as telas de orçamento entram na Fase 1. */}
+      {marcaIncompleta && (
+        <Link
+          href="/painel/marca"
+          className="flex items-center justify-between gap-4 rounded-xl border border-borda bg-superficie px-4 py-3.5 transition-colors hover:bg-fundo"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-tinta">Complete a sua marca</span>
+            <span className="mt-0.5 block text-xs text-tinta-suave">
+              Logo, telefone e documento no topo do orçamento. É o que faz o cliente confiar antes
+              de ler o preço.
+            </span>
+          </span>
+          <span aria-hidden className="shrink-0 text-lg text-tinta-suave">
+            &rsaquo;
+          </span>
+        </Link>
+      )}
+
+      {/* Estado vazio — as telas de orçamento entram na Fase 2, etapas C e E. */}
       <div className="flex flex-col items-center rounded-xl border border-dashed border-borda bg-superficie px-6 py-12 text-center">
         <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-fundo text-tinta-suave">
           <IconeOrcamentos className="size-6" />
@@ -44,16 +66,12 @@ export default async function PaginaPainel() {
           cliente aceitar pelo celular.
         </p>
 
-        <div className="mt-5">
-          <Botao tamanho="grande" disabled>
-            Novo orçamento
-          </Botao>
-          <p className="mt-2 text-xs text-tinta-suave">Disponível na próxima atualização</p>
+        <div className="mt-5 flex flex-col items-center">
+          <BotaoNovoOrcamento />
 
-          {/* Atalho temporário da Fase 1: sai quando o editor entrar. */}
           <Link
             href="/painel/documento-teste"
-            className="mt-4 inline-block text-sm font-medium text-tinta underline underline-offset-4"
+            className="mt-4 text-sm font-medium text-tinta-suave underline underline-offset-4 hover:text-tinta"
           >
             Ver o motor do documento
           </Link>
