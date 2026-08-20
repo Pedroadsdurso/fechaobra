@@ -40,6 +40,20 @@
   --color-linha: #edeff2;
   --color-borda-forte: #d8dce1;
 
+  /*
+    Contorno de CONTROLE, não de conteúdo.
+
+    O #d8dce1 do desenho dá 1,38:1 contra o branco. Num cartão isso não
+    incomoda — a borda ali só agrupa. Num botão incomoda muito: sob sol, no
+    celular, o contorno some e o botão passa a ler como texto solto.
+
+    Onde isso importa de verdade é o "Tenho uma dúvida". Ele é a única saída
+    de quem ficou em dúvida antes de aceitar, e quem não enxerga o botão não
+    pergunta — some da conversa. #7d8894 dá 3,61:1, acima dos 3:1 que a WCAG
+    pede para contorno de controle, com margem para a luz forte.
+  */
+  --color-borda-controle: #7d8894;
+
   /* Estados */
   --color-perigo: #b42318;
   --color-atencao: #b25e09;

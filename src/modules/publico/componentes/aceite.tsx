@@ -226,7 +226,7 @@ export function Aceite({
         href={linkDuvida}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex min-h-12 items-center justify-center rounded-xl border border-borda-forte bg-superficie text-sm font-semibold text-tinta"
+        className="flex min-h-12 items-center justify-center rounded-xl border border-borda-controle bg-superficie text-sm font-semibold text-tinta"
       >
         Tenho uma dúvida
       </a>
