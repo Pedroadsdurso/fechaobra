@@ -1,17 +1,17 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import { useActionState } from "react";
+import Link from 'next/link'
+import { useActionState } from 'react'
 
-import { Alerta } from "@/componentes/ui/alerta";
-import { Campo } from "@/componentes/ui/campo";
-import { cadastrar } from "@/modules/auth/acoes";
-import { ESTADO_INICIAL } from "@/modules/auth/estado";
+import { Alerta } from '@/componentes/ui/alerta'
+import { Campo } from '@/componentes/ui/campo'
+import { cadastrar } from '@/modules/auth/acoes'
+import { ESTADO_INICIAL } from '@/modules/auth/estado'
 
-import { BotaoEnviar } from "./botao-enviar";
+import { BotaoEnviar } from './botao-enviar'
 
 export function FormularioCadastro({ proximo }: { proximo?: string }) {
-  const [estado, acao] = useActionState(cadastrar, ESTADO_INICIAL);
+  const [estado, acao] = useActionState(cadastrar, ESTADO_INICIAL)
 
   return (
     <form action={acao} className="flex flex-col gap-4" noValidate>
@@ -54,9 +54,8 @@ export function FormularioCadastro({ proximo }: { proximo?: string }) {
         ninguém lê depois de já ter errado.
       */}
       <p className="-mt-1 rounded-lg border border-atencao/30 bg-atencao/5 px-3 py-2 text-xs leading-relaxed text-atencao-forte">
-        <strong className="font-bold">Use o mesmo e-mail da compra.</strong> É
-        por ele que o acesso é liberado — com um e-mail diferente, a compra não
-        encontra esta conta.
+        <strong className="font-bold">Use o mesmo e-mail da compra.</strong> É por ele que o acesso
+        é liberado — com um e-mail diferente, a compra não encontra esta conta.
       </p>
 
       <Campo
@@ -72,14 +71,11 @@ export function FormularioCadastro({ proximo }: { proximo?: string }) {
       <BotaoEnviar rotulo="Criar conta" rotuloEnviando="Criando conta..." />
 
       <p className="text-center text-sm text-tinta-suave">
-        Já tem conta?{" "}
-        <Link
-          href="/entrar"
-          className="font-medium text-tinta underline underline-offset-4"
-        >
+        Já tem conta?{' '}
+        <Link href="/entrar" className="font-medium text-tinta underline underline-offset-4">
           Entrar
         </Link>
       </p>
     </form>
-  );
+  )
 }

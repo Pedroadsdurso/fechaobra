@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { redirect } from 'next/navigation'
 
-import { temAcesso } from "@/modules/acesso/consultas";
+import { temAcesso } from '@/modules/acesso/consultas'
 
 /**
  * O desvio para a tela de bloqueio.
@@ -20,11 +20,7 @@ import { temAcesso } from "@/modules/acesso/consultas";
  * A tela mora em /acesso, FORA de /painel/*, justamente para não cair neste
  * layout — senão o desvio se morderia num laço infinito.
  */
-export default async function LayoutComAcesso({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  if (!(await temAcesso())) redirect("/acesso");
-  return <>{children}</>;
+export default async function LayoutComAcesso({ children }: { children: React.ReactNode }) {
+  if (!(await temAcesso())) redirect('/acesso')
+  return <>{children}</>
 }
