@@ -145,6 +145,38 @@ export async function processarEventoCakto(
 }
 
 async function liberar(admin: Admin, pedido: Pedido): Promise<Resultado> {
+  /*
+    ORDEM DE CHEGADA NÃO É GARANTIDA.
+
+    O caso óbvio — purchase_approved depois de refund — a guarda logo abaixo
+    cobre, porque a liberação está lá, revogada. O caso invertido não:
+
+      refund(X) chega primeiro  -> não existe liberação de X, nada a revogar
+      purchase_approved(X) depois -> cria acesso para um pedido REEMBOLSADO
+
+    Acontece de verdade: se o purchase_approved falhar na entrega e a Cakto
+    retentar em 30 minutos, o refund pode passar na frente. E acontece com a
+    tabela zerada, como agora.
+
+    Por isso a pergunta certa não é "existe liberação revogada?", e sim "este
+    pedido já foi reembolsado ou contestado alguma vez?". A resposta está no
+    log de eventos, que guarda tudo o que chegou.
+  */
+  const { data: revogacoes } = await admin
+    .from('eventos_cakto')
+    .select('tipo')
+    .eq('pedido_id', pedido.id)
+    .in('tipo', ['refund', 'chargeback'])
+    .limit(1)
+
+  if (revogacoes && revogacoes.length > 0) {
+    return {
+      processado: false,
+      nota: `compra aprovada para pedido que já tem ${revogacoes[0].tipo} registrado (${pedido.id}) — NÃO liberado, revisar à mão`,
+      pedidoId: pedido.id,
+    }
+  }
+
   const { data: existente } = await admin
     .from('liberacoes')
     .select('id, status, pedido_id')
@@ -198,11 +230,27 @@ async function liberar(admin: Admin, pedido: Pedido): Promise<Resultado> {
 
 async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resultado> {
   /*
-    Casa por id do pedido, com o e-mail como reserva.
+    ===========================================================================
+    A RESERVA POR E-MAIL SÓ VALE PARA LIBERAÇÃO MANUAL.
+    ===========================================================================
+    Não afrouxe isto para "casa por e-mail sempre". Parece mais seguro —
+    revogar em dúvida — e é o contrário.
 
-    O id é mais preciso: se a pessoa comprou duas vezes com o mesmo e-mail, o
-    reembolso é de um pedido específico. O e-mail cobre o caso de a liberação
-    ter sido criada à mão, sem pedido.
+    O cenário concreto, e ele é comum: a pessoa paga por Pix e a cobrança
+    duplica. Ela pede reembolso da duplicada, que é exatamente a coisa certa a
+    fazer. O refund chega com o pedido_id da DUPLICADA, que não casa com a
+    liberação (criada pelo pedido original). Com reserva ampla, cai no e-mail
+    e revoga o acesso que ela pagou e não pediu de volta.
+
+    Quem age direito perde a ferramenta de trabalho no meio de um orçamento.
+
+    A reserva existe para cobrir liberação criada à mão — as do fundador, com
+    pedido_id 'manual-fundador' — que nunca teriam pedido para casar. Por isso
+    ela só vale quando a liberação NÃO veio de compra.
+
+    Reembolso de pedido desconhecido contra liberação originada de compra:
+    registra, não revoga, e fica com nota para revisão.
+    ===========================================================================
   */
   const { data: porPedido } = await admin
     .from('liberacoes')
@@ -210,9 +258,27 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
     .eq('pedido_id', pedido.id)
     .maybeSingle()
 
-  const alvo =
-    porPedido ??
-    (await admin.from('liberacoes').select('id').eq('email', pedido.email).maybeSingle()).data
+  let alvo = porPedido
+  let casouPor = 'pedido'
+
+  if (!alvo) {
+    const { data: porEmail } = await admin
+      .from('liberacoes')
+      .select('id, pedido_id')
+      .eq('email', pedido.email)
+      .maybeSingle()
+
+    if (porEmail && !porEmail.pedido_id) {
+      alvo = { id: porEmail.id }
+      casouPor = 'e-mail (liberação manual, sem pedido)'
+    } else if (porEmail) {
+      return {
+        processado: false,
+        nota: `${tipo} do pedido ${pedido.id} não casa com a liberação de ${pedido.email}, que veio da compra ${porEmail.pedido_id} — NÃO revogado, revisar à mão`,
+        pedidoId: pedido.id,
+      }
+    }
+  }
 
   if (!alvo) {
     return {
@@ -235,7 +301,7 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
 
   return {
     processado: true,
-    nota: `revogado por ${tipo}${porPedido ? ' (casou por pedido)' : ' (casou por e-mail)'}`,
+    nota: `revogado por ${tipo} (casou por ${casouPor})`,
     pedidoId: pedido.id,
   }
 }
