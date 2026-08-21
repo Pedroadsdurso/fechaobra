@@ -52,7 +52,9 @@ export type Database = {
           cabecalhos: Json | null
           criado_em: string
           id: string
+          nota: string | null
           payload: Json
+          pedido_id: string | null
           processado: boolean
           segredo_valido: boolean
           tipo: string | null
@@ -61,7 +63,9 @@ export type Database = {
           cabecalhos?: Json | null
           criado_em?: string
           id?: string
+          nota?: string | null
           payload: Json
+          pedido_id?: string | null
           processado?: boolean
           segredo_valido?: boolean
           tipo?: string | null
@@ -70,7 +74,9 @@ export type Database = {
           cabecalhos?: Json | null
           criado_em?: string
           id?: string
+          nota?: string | null
           payload?: Json
+          pedido_id?: string | null
           processado?: boolean
           segredo_valido?: boolean
           tipo?: string | null
@@ -145,6 +151,45 @@ export type Database = {
           unidade?: string
           user_id?: string
           valor_unitario?: number
+        }
+        Relationships: []
+      }
+      liberacoes: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          email: string
+          id: string
+          liberada_em: string
+          motivo_revogacao: string | null
+          pedido_id: string | null
+          revogada_em: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          email: string
+          id?: string
+          liberada_em?: string
+          motivo_revogacao?: string | null
+          pedido_id?: string | null
+          revogada_em?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          email?: string
+          id?: string
+          liberada_em?: string
+          motivo_revogacao?: string | null
+          pedido_id?: string | null
+          revogada_em?: string | null
+          status?: string
+          user_id?: string | null
         }
         Relationships: []
       }

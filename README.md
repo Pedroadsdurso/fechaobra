@@ -222,3 +222,31 @@ como dado.
 O teste foi validado quebrando a hidratação de propósito — um `throw` que só
 dispara no navegador — e confirmando que ele falha com código de saída 1. Um
 teste que só sabe passar não prova nada.
+
+### Afirme sobre o mecanismo, não sobre o resultado
+
+**Teste que valida resultado sem validar caminho fica verde enquanto o caminho
+apodrece.**
+
+Ao testar "compra aprovada depois de reembolso não reativa o acesso", a
+afirmação era só sobre o resultado: `status` continua `revogada`. Verde. Mas a
+razão estava errada — quem barrou foi a **idempotência** (aquele pedido já
+tinha sido processado), não a guarda de revogado. A guarda nunca rodou.
+
+Só apareceu porque uma segunda afirmação olhava o caminho: `processado ===
+false`, que a idempotência não produz. Sem ela, o teste ficaria verde para
+sempre — e no dia em que a idempotência mudasse de lugar, o acesso voltaria
+sozinho para quem pediu o dinheiro de volta.
+
+Na prática, três hábitos:
+
+- **verifique COMO, não só O QUÊ.** "Não criou" é fraco: um id inválido, uma
+  sessão expirada ou um erro de banco também não criam. Prove que foi o gate;
+- **desligue o caminho alternativo** quando existir um que produziria o mesmo
+  resultado, para isolar o que se quer medir;
+- **prova causal** onde der: mude só a variável em questão e mostre que o
+  resultado vira. Em `verificar:acesso`, a mesma chamada com o mesmo cookie
+  passa depois de inserir a liberação — logo, o que barrava era ela.
+
+Vale junto com a regra do `verificar:hidratacao`: um teste verde por acidente
+é pior que teste nenhum, porque desliga a vigilância.

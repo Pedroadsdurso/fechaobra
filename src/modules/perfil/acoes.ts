@@ -1,55 +1,58 @@
-'use server'
+"use server";
 
-import { revalidatePath } from 'next/cache'
+import { exigirAcesso } from "@/modules/acesso/guarda";
+
+import { revalidatePath } from "next/cache";
 
 import {
   BUCKET_LOGOS,
   criarClienteAdministrador,
   SEGUNDOS_URL_ASSINADA,
-} from '@/lib/supabase/administrador'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
+} from "@/lib/supabase/administrador";
+import { criarClienteServidor } from "@/lib/supabase/servidor";
 
-import { esquemaMarca } from './esquemas'
-import type { EstadoMarca, ResultadoLogo } from './estado'
+import { esquemaMarca } from "./esquemas";
+import type { EstadoMarca, ResultadoLogo } from "./estado";
 
-const TAMANHO_MAXIMO = 500 * 1024
-const TIPOS_ACEITOS = ['image/png', 'image/jpeg']
+const TAMANHO_MAXIMO = 500 * 1024;
+const TIPOS_ACEITOS = ["image/png", "image/jpeg"];
 
 async function exigirUsuario() {
-  const supabase = await criarClienteServidor()
+  const supabase = await criarClienteServidor();
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
-  if (!user) throw new Error('Sessão expirada. Entre de novo.')
-  return { supabase, user }
+  if (!user) throw new Error("Sessão expirada. Entre de novo.");
+  return { supabase, user };
 }
 
 export async function salvarMarca(
   _anterior: EstadoMarca,
   dados: FormData,
 ): Promise<EstadoMarca> {
+  await exigirAcesso();
   const resultado = esquemaMarca.safeParse({
-    nomeEmpresa: dados.get('nomeEmpresa'),
-    responsavel: dados.get('responsavel'),
-    telefone: dados.get('telefone'),
-    email: dados.get('email'),
-    cnpjCpf: dados.get('cnpjCpf'),
-    endereco: dados.get('endereco'),
-    corPrimaria: dados.get('corPrimaria'),
-  })
+    nomeEmpresa: dados.get("nomeEmpresa"),
+    responsavel: dados.get("responsavel"),
+    telefone: dados.get("telefone"),
+    email: dados.get("email"),
+    cnpjCpf: dados.get("cnpjCpf"),
+    endereco: dados.get("endereco"),
+    corPrimaria: dados.get("corPrimaria"),
+  });
 
   if (!resultado.success) {
-    return { errosPorCampo: resultado.error.flatten().fieldErrors }
+    return { errosPorCampo: resultado.error.flatten().fieldErrors };
   }
 
-  const { supabase, user } = await exigirUsuario()
-  const m = resultado.data
+  const { supabase, user } = await exigirUsuario();
+  const m = resultado.data;
 
   // Escrita com a sessão do usuário, não com service role: o RLS de perfis já
   // garante que ninguém alcança a linha de outro.
   const { error } = await supabase
-    .from('perfis')
+    .from("perfis")
     .update({
       nome_empresa: m.nomeEmpresa,
       responsavel: m.responsavel ?? null,
@@ -59,13 +62,14 @@ export async function salvarMarca(
       endereco: m.endereco ?? null,
       cor_primaria: m.corPrimaria,
     })
-    .eq('user_id', user.id)
+    .eq("user_id", user.id);
 
-  if (error) return { erro: 'Não foi possível salvar. Tente de novo em instantes.' }
+  if (error)
+    return { erro: "Não foi possível salvar. Tente de novo em instantes." };
 
-  revalidatePath('/painel/marca')
-  revalidatePath('/painel')
-  return { ok: true }
+  revalidatePath("/painel/marca");
+  revalidatePath("/painel");
+  return { ok: true };
 }
 
 /**
@@ -77,63 +81,81 @@ export async function salvarMarca(
  * arquivo de outro.
  */
 export async function enviarLogo(dados: FormData): Promise<ResultadoLogo> {
-  const arquivo = dados.get('logo')
+  await exigirAcesso();
+  const arquivo = dados.get("logo");
 
   if (!(arquivo instanceof File) || arquivo.size === 0) {
-    return { ok: false, erro: 'Nenhum arquivo recebido.' }
+    return { ok: false, erro: "Nenhum arquivo recebido." };
   }
   if (!TIPOS_ACEITOS.includes(arquivo.type)) {
-    return { ok: false, erro: 'Envie uma imagem PNG ou JPEG.' }
+    return { ok: false, erro: "Envie uma imagem PNG ou JPEG." };
   }
   if (arquivo.size > TAMANHO_MAXIMO) {
-    return { ok: false, erro: 'Imagem grande demais mesmo depois da compressão.' }
+    return {
+      ok: false,
+      erro: "Imagem grande demais mesmo depois da compressão.",
+    };
   }
 
-  const { supabase, user } = await exigirUsuario()
+  const { supabase, user } = await exigirUsuario();
 
-  const extensao = arquivo.type === 'image/png' ? 'png' : 'jpg'
-  const caminho = `${user.id}/logo.${extensao}`
-  const admin = criarClienteAdministrador()
+  const extensao = arquivo.type === "image/png" ? "png" : "jpg";
+  const caminho = `${user.id}/logo.${extensao}`;
+  const admin = criarClienteAdministrador();
 
   // Trocar de PNG para JPEG (ou o contrário) deixaria o arquivo antigo órfão.
-  const { data: anteriores } = await admin.storage.from(BUCKET_LOGOS).list(user.id)
+  const { data: anteriores } = await admin.storage
+    .from(BUCKET_LOGOS)
+    .list(user.id);
   const orfaos = (anteriores ?? [])
-    .filter((f) => f.name.startsWith('logo.') && f.name !== `logo.${extensao}`)
-    .map((f) => `${user.id}/${f.name}`)
-  if (orfaos.length > 0) await admin.storage.from(BUCKET_LOGOS).remove(orfaos)
+    .filter((f) => f.name.startsWith("logo.") && f.name !== `logo.${extensao}`)
+    .map((f) => `${user.id}/${f.name}`);
+  if (orfaos.length > 0) await admin.storage.from(BUCKET_LOGOS).remove(orfaos);
 
   const { error: erroUpload } = await admin.storage
     .from(BUCKET_LOGOS)
-    .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type })
+    .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type });
 
-  if (erroUpload) return { ok: false, erro: 'Falha ao enviar a imagem. Tente de novo.' }
+  if (erroUpload)
+    return { ok: false, erro: "Falha ao enviar a imagem. Tente de novo." };
 
   const { error: erroPerfil } = await supabase
-    .from('perfis')
+    .from("perfis")
     .update({ logo_url: caminho })
-    .eq('user_id', user.id)
+    .eq("user_id", user.id);
 
-  if (erroPerfil) return { ok: false, erro: 'Imagem enviada, mas não foi possível salvar no perfil.' }
+  if (erroPerfil)
+    return {
+      ok: false,
+      erro: "Imagem enviada, mas não foi possível salvar no perfil.",
+    };
 
   const { data: assinada } = await admin.storage
     .from(BUCKET_LOGOS)
-    .createSignedUrl(caminho, SEGUNDOS_URL_ASSINADA)
+    .createSignedUrl(caminho, SEGUNDOS_URL_ASSINADA);
 
-  revalidatePath('/painel/marca')
-  return { ok: true, caminho, url: assinada?.signedUrl }
+  revalidatePath("/painel/marca");
+  return { ok: true, caminho, url: assinada?.signedUrl };
 }
 
 export async function removerLogo(): Promise<ResultadoLogo> {
-  const { supabase, user } = await exigirUsuario()
-  const admin = criarClienteAdministrador()
+  await exigirAcesso();
+  const { supabase, user } = await exigirUsuario();
+  const admin = criarClienteAdministrador();
 
-  const { data: arquivos } = await admin.storage.from(BUCKET_LOGOS).list(user.id)
-  const caminhos = (arquivos ?? []).map((f) => `${user.id}/${f.name}`)
-  if (caminhos.length > 0) await admin.storage.from(BUCKET_LOGOS).remove(caminhos)
+  const { data: arquivos } = await admin.storage
+    .from(BUCKET_LOGOS)
+    .list(user.id);
+  const caminhos = (arquivos ?? []).map((f) => `${user.id}/${f.name}`);
+  if (caminhos.length > 0)
+    await admin.storage.from(BUCKET_LOGOS).remove(caminhos);
 
-  const { error } = await supabase.from('perfis').update({ logo_url: null }).eq('user_id', user.id)
-  if (error) return { ok: false, erro: 'Não foi possível remover o logo.' }
+  const { error } = await supabase
+    .from("perfis")
+    .update({ logo_url: null })
+    .eq("user_id", user.id);
+  if (error) return { ok: false, erro: "Não foi possível remover o logo." };
 
-  revalidatePath('/painel/marca')
-  return { ok: true }
+  revalidatePath("/painel/marca");
+  return { ok: true };
 }

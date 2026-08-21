@@ -213,6 +213,12 @@ async function irPara(cdp, url) {
   await new Promise((r) => setTimeout(r, 2500))
 }
 
+function adminSupabase() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+}
+
 /** Apaga a conta do teste e tudo o que ela gerou. */
 async function limpar() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -224,6 +230,7 @@ async function limpar() {
   }
 
   const admin = createClient(url, chave, { auth: { persistSession: false } })
+  await admin.from('liberacoes').delete().eq('email', EMAIL)
   const { data } = await admin.auth.admin.listUsers({ perPage: 200 })
   const conta = data?.users.find((u) => u.email === EMAIL)
   if (!conta) return
@@ -318,6 +325,23 @@ async function principal() {
     if (criou !== 'ok') {
       console.error(`\n  não consegui criar a conta de teste — ${criou}\n`)
       falhas.push({ caminho: '/cadastro', detalhe: criou })
+    }
+
+    /*
+      A conta descartável nasce SEM liberação e cairia em /acesso, e o teste
+      mediria a tela de bloqueio achando que mediu o painel.
+
+      A liberação é inserida com service role, como o webhook faria. Isto não
+      afrouxa o gate: ele foi provado à parte em verificar:acesso, com prova
+      causal. Aqui a liberação é pré-condição do que se quer medir, não o
+      objeto da medição.
+    */
+    const { data: contas } = await adminSupabase().auth.admin.listUsers({ perPage: 1000 })
+    const conta = contas?.users.find((u) => u.email === EMAIL)
+    if (conta) {
+      await adminSupabase()
+        .from('liberacoes')
+        .insert({ email: EMAIL, user_id: conta.id, status: 'ativa', pedido_id: 'teste-hidratacao' })
     }
 
     // ---- cria um orçamento, para a rota do editor ter o que abrir ----

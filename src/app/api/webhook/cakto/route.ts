@@ -4,15 +4,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import { dentroDoLimite, ipDaRequisicao } from '@/lib/limite-taxa'
 import { criarClienteAdministrador } from '@/lib/supabase/administrador'
+import { processarEventoCakto } from '@/modules/acesso/processar-cakto'
 import type { Json } from '@/lib/tipos-banco'
 
 /**
- * Webhook da Cakto — ETAPA A: só registra, não processa.
+ * Webhook da Cakto.
  *
- * Nada aqui libera, revoga ou toca em conta de usuário. Esta rota existe para
- * responder uma pergunta antes de a lógica ser escrita: o que a Cakto manda
- * de verdade? Webhook construído no escuro falha exatamente quando entra
- * dinheiro, e o mapeamento de campos vai ser escrito olhando o payload real.
+ * Registra TODO evento e processa só os três que mexem em acesso —
+ * purchase_approved, refund e chargeback. O mapeamento nasceu olhando o
+ * payload real capturado na Etapa A, não a documentação: ver as duas
+ * diferenças em modules/acesso/processar-cakto.ts.
  *
  * ===========================================================================
  * A CAKTO NÃO ASSINA O PAYLOAD
@@ -144,13 +145,26 @@ export async function POST(request: NextRequest) {
     partir daqui. A linha inválida é evidência, não instrução.
   */
   const admin = criarClienteAdministrador()
-  const { error } = await admin.from('eventos_cakto').insert({
-    tipo,
-    payload: semSegredo(corpo),
-    cabecalhos: cabecalhosLimpos(request),
-    segredo_valido: valido,
-    processado: false,
-  })
+  const limpo = semSegredo(corpo)
+
+  /*
+    REGISTRA PRIMEIRO, PROCESSA DEPOIS.
+
+    A ordem importa: se o processamento explodir, o evento já está gravado e
+    eu consigo reconstruir o que aconteceu. O contrário — processar e depois
+    gravar — perderia o rastro justamente no caso em que ele é necessário.
+  */
+  const { data: registro, error } = await admin
+    .from('eventos_cakto')
+    .insert({
+      tipo,
+      payload: limpo,
+      cabecalhos: cabecalhosLimpos(request),
+      segredo_valido: valido,
+      processado: false,
+    })
+    .select('id')
+    .single()
 
   if (error) {
     // 500 faz a Cakto tentar de novo — melhor do que perder o evento calado.
@@ -162,14 +176,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: 'Segredo inválido.' }, { status: 401 })
   }
 
-  /*
-    200 com o segredo válido, mesmo sem processar nada.
+  try {
+    const r = await processarEventoCakto(admin, tipo ?? '', limpo)
 
-    É o combinado da Etapa A, e também o que evita a Cakto entrar em
-    retentativa por 30 minutos enquanto a liberação ainda não existe. Quando
-    a Etapa B entrar, ela lê as linhas com segredo_valido e processado=false.
-  */
-  return NextResponse.json({ ok: true, registrado: true })
+    await admin
+      .from('eventos_cakto')
+      .update({ processado: r.processado, pedido_id: r.pedidoId, nota: r.nota })
+      .eq('id', registro.id)
+
+    /*
+      200 mesmo quando não processou.
+
+      Dado incompleto não melhora com retentativa: o payload que chegou torto
+      vai chegar torto de novo. Melhor registrar como pendente e eu olhar do
+      que a Cakto insistir por 30 minutos e desistir. Ver a nota sobre falhar
+      alto em processar-cakto.ts.
+    */
+    return NextResponse.json({ ok: true, processado: r.processado })
+  } catch (e) {
+    /*
+      Erro de verdade — banco fora, por exemplo. Aqui 500 É o certo: a
+      retentativa da Cakto tem chance real de dar certo, e perder um
+      purchase_approved silenciosamente deixaria alguém que pagou sem acesso.
+    */
+    const mensagem = e instanceof Error ? e.message : String(e)
+    console.error('falhei ao processar evento da Cakto:', mensagem)
+    await admin.from('eventos_cakto').update({ nota: `erro: ${mensagem}` }).eq('id', registro.id)
+    return NextResponse.json({ erro: 'Falha ao processar.' }, { status: 500 })
+  }
 }
 
 /**
@@ -179,7 +213,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     rota: 'webhook cakto',
-    etapa: 'A — registro apenas, nenhum processamento',
+    processa: ['purchase_approved', 'refund', 'chargeback'],
     configurada: Boolean(process.env.CAKTO_WEBHOOK_SECRET?.trim()),
   })
 }
