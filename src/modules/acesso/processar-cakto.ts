@@ -281,9 +281,33 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
   }
 
   if (!alvo) {
+    /*
+      ===========================================================================
+      REVOGAÇÃO SEM ALVO NÃO É CASO RESOLVIDO. É CASO PARA OLHAR.
+      ===========================================================================
+      Terceira decisão desta fase que parece candidata a "simplificar" depois.
+      Não simplifique: `processado: true` aqui faria isto sumir da revisão.
+
+      Um reembolso ou contestação de pedido que o sistema NUNCA VIU significa
+      uma de três coisas, e nenhuma é boa:
+
+        - cobrança que aconteceu fora do fluxo previsto;
+        - fraude;
+        - um purchase_approved que se perdeu — entrega falhada, payload
+          incompleto, janela em que o webhook estava fora.
+
+      É verdade que existe um caso legítimo: entrega fora de ordem, com a
+      contestação chegando antes da compra. Foi o que aconteceu no disparo de
+      teste. Mas a assimetria manda de novo — revisar um caso legítimo custa
+      um olhar; não ver uma contestação real custa dinheiro e não avisa
+      ninguém.
+
+      Fica registrado, não processado, e aparece na revisão.
+      ===========================================================================
+    */
     return {
-      processado: true,
-      nota: `${tipo} sem liberação correspondente (pedido ${pedido.id}) — nada a revogar`,
+      processado: false,
+      nota: `${tipo} sem liberação correspondente (pedido ${pedido.id}) — nada a revogar, mas contestação de pedido desconhecido merece revisão`,
       pedidoId: pedido.id,
     }
   }
