@@ -32,6 +32,7 @@ import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
 import { CabecalhoSecao } from './secao-editor'
+import { useFolgaDaBarra } from './usar-folga-da-barra'
 import { SeletorCliente } from './seletor-cliente'
 import { TextosDobrados } from './textos-dobrados'
 
@@ -121,6 +122,11 @@ export function EditorOrcamento({
   const [envio, setEnvio] = useState<{ token: string; reenvio: boolean } | null>(null)
   const [enviando, setEnviando] = useState(false)
   const ehDesktop = useEhDesktop()
+
+  // A folga embaixo do formulário é medida a partir da barra fixa, não fixada
+  // em CSS: a altura dela muda com o texto. Ver usar-folga-da-barra.ts.
+  const barra = useRef<HTMLDivElement>(null)
+  const folga = useFolgaDaBarra(barra)
 
   /*
     Os textos como o modelo entregou.
@@ -316,7 +322,12 @@ export function EditorOrcamento({
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start lg:gap-6">
-    <div className="flex flex-col gap-6">
+    {/*
+      A folga vem medida da barra fixa, não de uma constante: com a frase de
+      pendência em duas linhas ela é bem mais alta, e um valor fixo deixava o
+      campo "Prazo de execução" atrás dela sem rolagem que alcançasse.
+    */}
+    <div className="flex flex-col gap-6" style={{ paddingBottom: folga || undefined }}>
       {/*
         Sob o cabeçalho do app, não no lugar dele: a navegação continua onde
         estava e o estado de salvamento fica sempre visível enquanto se digita.
@@ -520,13 +531,6 @@ export function EditorOrcamento({
       </section>
 
       {/*
-        A barra é fixa e fica por cima do conteúdo. Sem esta folga, o último
-        campo do editor ficaria embaixo dela e não dava para digitar. O
-        pb-28 do AppShell cobre só a barra de navegação, não esta.
-      */}
-      <div className="h-20 lg:hidden" aria-hidden />
-
-      {/*
         UMA barra, não dois flutuantes.
 
         Antes havia um botão fixo de "Ver prévia" (z-30) por cima da faixa de
@@ -542,6 +546,7 @@ export function EditorOrcamento({
         prévia tem largura própria — não há como se sobreporem.
       */}
       <div
+        ref={barra}
         className="
           fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30
           border-t border-borda bg-superficie px-4 py-3

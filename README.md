@@ -173,6 +173,26 @@ Next troca esses imports por RPC, nada deles vai para o bundle, e ler
 `SUPABASE_SERVICE_ROLE_KEY` ali é o comportamento correto. Um check que acusasse
 isso ensinaria a ignorá-lo.
 
+### `transform` em ancestral quebra todo `position: fixed` descendente
+
+**Um ancestral com `transform` (ou `filter`, ou `will-change: transform`) vira
+bloco de contenção, e `position: fixed` descendente deixa de grudar na janela:
+passa a se posicionar relativo ao ancestral, como um `absolute`.**
+
+O `template.tsx` do painel aplica a animação de entrada de rota (`.fo-rota`)
+em volta de TODAS as rotas. Com `animation-fill-mode: both`, o `transform` do
+keyframe continuava em efeito depois da animação terminar — e a barra fixa do
+editor parava no fim do documento, cobrindo o campo "Prazo de execução" sem
+rolagem que alcançasse. A correção foi `backwards`: aplica o estado inicial
+antes de começar (o que evita o piscar) e não deixa resíduo depois.
+
+A implicação que vale mais que o bug: **qualquer `fixed` novo dentro do painel
+quebra do mesmo jeito se houver resíduo de `transform` no template — e o
+sintoma vai parecer outro problema** (elemento "sumido", barra "no lugar
+errado", sobreposição). Antes de caçar z-index ou layout, confira se algum
+ancestral está com `transform` em efeito: no DevTools, um `fixed` que rola com
+a página é este bug, sempre.
+
 ### Hidratação quebrada é invisível — rode `verificar:hidratacao` antes e depois de todo deploy
 
 **Hidratação quebrada é invisível em `tsc`, `lint`, screenshot e peso de bundle.

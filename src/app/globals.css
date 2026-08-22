@@ -136,9 +136,26 @@
 }
 
 @layer components {
-  /* Entrada de rota. Deslocamento mínimo: 6px sugere movimento sem chamar atenção. */
+  /*
+    Entrada de rota. Deslocamento mínimo: 6px sugere movimento sem chamar
+    atenção.
+
+    `backwards`, NÃO `both`. Com `both` a animação segue preenchendo depois de
+    terminar, e o elemento continua com `transform` em efeito — o que faz dele
+    um BLOCO DE CONTENÇÃO. Todo `position: fixed` descendente vira, na prática,
+    `absolute` relativo a ele: para de grudar na janela e passa a rolar com a
+    página.
+
+    Foi o que quebrou a barra de baixo do editor em produção. Ela ficava no fim
+    do documento, por cima do campo "Prazo de execução", e não havia rolagem
+    que alcançasse — porque o conteúdo acabava ali. A navegação inferior
+    escapou por viver no layout, fora deste template.
+
+    `backwards` aplica o estado inicial ANTES de começar, que é o que evita o
+    piscar, e não deixa resíduo depois. A animação continua idêntica aos olhos.
+  */
   .fo-rota {
-    animation: fo-entrada 180ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation: fo-entrada 180ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
   }
 
   /*
