@@ -23,9 +23,14 @@ import type { MetadataRoute } from 'next'
  * start_url em /painel: quem instalou é prestador, e a rotina dele começa no
  * painel. Deslogado, o middleware manda para /entrar — o fluxo normal.
  *
- * theme_color aqui é um valor único (manifest não aceita media query): fica o
- * claro, que é o tema de partida do app. O dark do navegador continua coberto
- * pelo themeColor do layout.
+ * Cores no azul-tinta da marca (#1E2939), não no claro do app: elas pintam a
+ * SPLASH do Android (fundo + ícone maskable centralizado) e devem casar com a
+ * tela de carregamento própria que vem logo depois — transição invisível.
+ * Dentro do app, a status bar volta ao claro porque a meta theme-color da
+ * página (o themeColor do layout) tem precedência sobre o manifest.
+ *
+ * O iOS ignora tudo isto para splash: lá valem as apple-touch-startup-image
+ * por resolução, declaradas no layout (appleWebApp.startupImage).
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -38,8 +43,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#f6f7f9',
-    theme_color: '#f6f7f9',
+    background_color: '#1E2939',
+    theme_color: '#1E2939',
     lang: 'pt-BR',
     icons: [
       { src: '/icone-192.png', sizes: '192x192', type: 'image/png' },
