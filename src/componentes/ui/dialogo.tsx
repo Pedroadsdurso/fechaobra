@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 
+import { useEspacoVisivel } from './usar-espaco-visivel'
+
 /**
  * Diálogo modal em cima do <dialog> nativo.
  *
@@ -24,6 +26,31 @@ export function Dialogo({
   children: ReactNode
 }) {
   const referencia = useRef<HTMLDialogElement>(null)
+
+  /*
+    O espaço que sobra depois do teclado. Só medido enquanto o diálogo está
+    aberto — não faz sentido ouvir a visualViewport o tempo todo.
+
+    Isto vale para TODAS as folhas do app, porque todas passam por aqui:
+    escolher cliente, novo cliente, biblioteca, prévia, envio e os textos do
+    orçamento. Corrigir caso a caso deixaria as próximas nascendo quebradas.
+  */
+  const espaco = useEspacoVisivel(aberto)
+
+  /*
+    `margin-bottom` empurra a folha para cima do teclado; `max-height` a
+    impede de estourar o que sobrou. Em telas grandes o diálogo é centrado e
+    nada disso se aplica — por isso o max-height entra sempre, mas a margem
+    só quando há teclado.
+
+    Sem valor medido (primeiro render, servidor), cai no CSS de antes.
+  */
+  const estilo = espaco
+    ? {
+        marginBottom: espaco.teclado || undefined,
+        maxHeight: Math.round(espaco.altura * 0.92),
+      }
+    : undefined
 
   useEffect(() => {
     const dialogo = referencia.current
@@ -91,6 +118,7 @@ export function Dialogo({
   return (
     <dialog
       ref={referencia}
+      style={estilo}
       aria-labelledby="titulo-dialogo"
       onClick={(evento) => {
         // Clique no ::backdrop chega no próprio <dialog>, não nos filhos.
@@ -124,7 +152,15 @@ export function Dialogo({
             aria-label="Fechar"
             className="-mr-2 -mt-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta"
           >
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden>
+            <svg
+              viewBox="0 0 24 24"
+              className="size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.75}
+              strokeLinecap="round"
+              aria-hidden
+            >
               <path d="m6 6 12 12M18 6 6 18" />
             </svg>
           </button>

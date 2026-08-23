@@ -32,6 +32,9 @@ import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
 import { CabecalhoSecao } from './secao-editor'
+import { useEspacoVisivel } from '@/componentes/ui/usar-espaco-visivel'
+
+import { BotaoBaixarPdf } from './botao-baixar-pdf'
 import { useFolgaDaBarra } from './usar-folga-da-barra'
 import { SeletorCliente } from './seletor-cliente'
 import { TextosDobrados } from './textos-dobrados'
@@ -129,6 +132,31 @@ export function EditorOrcamento({
   const folga = useFolgaDaBarra(barra)
 
   /*
+    A altura que sobra para o visor de PDF dentro da folha de prévia.
+
+    A caixa tinha `h-[70dvh]` — 70% da janela INTEIRA, que no iOS não encolhe
+    com o teclado nem acompanha a folha quando ela é limitada. Medido: com o
+    espaço visível em 516px, a folha ficava em 41–516 e o conteúdo ia até 737.
+    Vazava 221px para fora, sem rolagem que alcançasse.
+
+    Agora acompanha o espaço real. O desconto de 112px cobre o cabeçalho da
+    folha e o respiro do corpo.
+  */
+  const espacoPrevia = useEspacoVisivel(previewAberto)
+  const alturaVisor = espacoPrevia ? Math.round(espacoPrevia.altura * 0.92) - 112 : null
+
+  /*
+    Abaixo deste piso não vale a pena mostrar.
+
+    O visor renderiza uma página A4 inteira: com menos de 300px de altura, o
+    texto do orçamento fica menor que 5px na tela. Dá para ver que existe um
+    documento, não dá para ler nada — e um visor ilegível é pior que um aviso
+    honesto, porque parece que o app está quebrado.
+  */
+  const PISO_DO_VISOR = 300
+  const previaCabe = alturaVisor === null || alturaVisor >= PISO_DO_VISOR
+
+  /*
     Os textos como o modelo entregou.
 
     Serve só para o selo "Editado" nas linhas dobradas. Fica vazio quando o
@@ -141,9 +169,12 @@ export function EditorOrcamento({
   // render e reescreveria a tabela de itens à toa.
   const salvo = useRef(JSON.stringify(inicial))
 
-  const alterar = useCallback(<C extends keyof RascunhoOrcamento>(campo: C, valor: RascunhoOrcamento[C]) => {
-    setRascunho((atual) => ({ ...atual, [campo]: valor }))
-  }, [])
+  const alterar = useCallback(
+    <C extends keyof RascunhoOrcamento>(campo: C, valor: RascunhoOrcamento[C]) => {
+      setRascunho((atual) => ({ ...atual, [campo]: valor }))
+    },
+    [],
+  )
 
   // ---- autosave ------------------------------------------------------------
   useEffect(() => {
@@ -188,7 +219,10 @@ export function EditorOrcamento({
     })
 
     const temTexto =
-      rascunho.textoEscopo || rascunho.textoExclusoes || rascunho.textoGarantia || rascunho.textoCondicoesPagamento
+      rascunho.textoEscopo ||
+      rascunho.textoExclusoes ||
+      rascunho.textoGarantia ||
+      rascunho.textoCondicoesPagamento
 
     // Não sobrescreve trabalho: se já há texto editado, só troca mediante
     // confirmação. Perder um escopo ajustado à mão seria imperdoável.
@@ -237,10 +271,7 @@ export function EditorOrcamento({
     }
 
     const guardado = resposta.item
-    setItensBiblioteca((atual) => [
-      guardado,
-      ...atual.filter((i) => i.id !== guardado.id),
-    ])
+    setItensBiblioteca((atual) => [guardado, ...atual.filter((i) => i.id !== guardado.id)])
     setAviso(`“${guardado.descricao}” guardado na biblioteca.`)
   }
 
@@ -264,15 +295,12 @@ export function EditorOrcamento({
   }
 
   // ---- pacotes -------------------------------------------------------------
-  const mudarPacote = useCallback(
-    (nivel: Pacote, campo: 'rotulo' | 'descricao', valor: string) => {
-      setRascunho((atual) => ({
-        ...atual,
-        pacotes: atual.pacotes.map((p) => (p.nivel === nivel ? { ...p, [campo]: valor } : p)),
-      }))
-    },
-    [],
-  )
+  const mudarPacote = useCallback((nivel: Pacote, campo: 'rotulo' | 'descricao', valor: string) => {
+    setRascunho((atual) => ({
+      ...atual,
+      pacotes: atual.pacotes.map((p) => (p.nivel === nivel ? { ...p, [campo]: valor } : p)),
+    }))
+  }, [])
 
   const destacarPacote = useCallback((nivel: Pacote) => {
     setRascunho((atual) => ({
@@ -322,215 +350,219 @@ export function EditorOrcamento({
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start lg:gap-6">
-    {/*
+      {/*
       A folga vem medida da barra fixa, não de uma constante: com a frase de
       pendência em duas linhas ela é bem mais alta, e um valor fixo deixava o
       campo "Prazo de execução" atrás dela sem rolagem que alcançasse.
     */}
-    <div className="flex flex-col gap-6" style={{ paddingBottom: folga || undefined }}>
-      {/*
+      <div className="flex flex-col gap-6" style={{ paddingBottom: folga || undefined }}>
+        {/*
         Sob o cabeçalho do app, não no lugar dele: a navegação continua onde
         estava e o estado de salvamento fica sempre visível enquanto se digita.
       */}
-      <div className="sticky top-14 z-20 -mx-4 -mt-5 flex min-h-[52px] items-center gap-2.5 border-b border-borda bg-superficie px-4 md:top-0 md:-mt-8">
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-tinta">
-          Orçamento nº {String(rascunho.numero).padStart(3, '0')}{' '}
-          <span className="font-normal text-tinta-meta">· {STATUS_ORCAMENTO.find((e) => e.valor === rascunho.status)?.rotulo ?? rascunho.status}</span>
-        </p>
-        <IndicadorSalvamento estado={salvamento} />
-      </div>
-
-      {aviso && <Alerta tom="info">{aviso}</Alerta>}
-
-      <section className="flex flex-col gap-3">
-        <CabecalhoSecao
-          numero={1}
-          titulo="Cliente e serviço"
-          selo={{ texto: 'Obrigatório', tom: 'obrigatorio' }}
-        />
-        <SeletorCliente
-          clientes={clientes}
-          clienteId={rascunho.clienteId}
-          aoSelecionar={(cliente) => {
-            setRascunho((atual) => ({
-              ...atual,
-              clienteId: cliente?.id ?? null,
-              // O endereço do cliente costuma ser o local do serviço. Preenche
-              // se estiver vazio, sem sobrescrever o que a pessoa digitou.
-              localServico: atual.localServico || cliente?.endereco || '',
-            }))
-          }}
-        />
-
-        <Campo
-          rotulo="Título do orçamento"
-          name="titulo"
-          value={rascunho.titulo}
-          onChange={(e) => alterar('titulo', e.target.value)}
-          placeholder="Ex.: Reforma de banheiro social"
-          dica="Aparece em destaque, logo abaixo do cabeçalho."
-        />
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="tipoServico" className="text-sm font-medium text-tinta">
-            Tipo de serviço
-          </label>
-          <select
-            id="tipoServico"
-            value={rascunho.tipoServico}
-            onChange={(e) => escolherTipoServico(e.target.value)}
-            className="min-h-11 w-full rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
-          >
-            <option value="">Escolher…</option>
-            {TIPOS_SERVICO.map((t) => (
-              <option key={t.valor} value={t.valor}>
-                {t.rotulo}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-tinta-suave">
-            Escolher o tipo traz escopo, exclusões, garantia e condições prontos — todos editáveis.
+        <div className="sticky top-14 z-20 -mx-4 -mt-5 flex min-h-[52px] items-center gap-2.5 border-b border-borda bg-superficie px-4 md:top-0 md:-mt-8">
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-tinta">
+            Orçamento nº {String(rascunho.numero).padStart(3, '0')}{' '}
+            <span className="font-normal text-tinta-meta">
+              ·{' '}
+              {STATUS_ORCAMENTO.find((e) => e.valor === rascunho.status)?.rotulo ?? rascunho.status}
+            </span>
           </p>
-
-          <label className="mt-1 flex items-start gap-2 text-xs text-tinta-suave">
-            <input
-              type="checkbox"
-              checked={substituirTextos}
-              onChange={(e) => setSubstituirTextos(e.target.checked)}
-              className="mt-0.5 size-4"
-            />
-            Substituir os textos ao trocar de serviço
-          </label>
+          <IndicadorSalvamento estado={salvamento} />
         </div>
 
-        <Campo
-          rotulo="Local do serviço"
-          name="localServico"
-          value={rascunho.localServico}
-          onChange={(e) => alterar('localServico', e.target.value)}
-          placeholder="Endereço da obra"
-        />
-      </section>
+        {aviso && <Alerta tom="info">{aviso}</Alerta>}
 
-      <section className="flex flex-col gap-3">
-        <CabecalhoSecao
-          numero={2}
-          titulo="Itens"
-          selo={{ texto: 'Obrigatório', tom: 'obrigatorio' }}
-        />
-      </section>
+        <section className="flex flex-col gap-3">
+          <CabecalhoSecao
+            numero={1}
+            titulo="Cliente e serviço"
+            selo={{ texto: 'Obrigatório', tom: 'obrigatorio' }}
+          />
+          <SeletorCliente
+            clientes={clientes}
+            clienteId={rascunho.clienteId}
+            aoSelecionar={(cliente) => {
+              setRascunho((atual) => ({
+                ...atual,
+                clienteId: cliente?.id ?? null,
+                // O endereço do cliente costuma ser o local do serviço. Preenche
+                // se estiver vazio, sem sobrescrever o que a pessoa digitou.
+                localServico: atual.localServico || cliente?.endereco || '',
+              }))
+            }}
+          />
 
-      <EditorItens
-        itens={rascunho.itens}
-        aoMudar={mudarItem}
-        aoRemover={removerItem}
-        aoReordenar={reordenarItens}
-        aoAdicionar={adicionarItem}
-        aoAbrirBiblioteca={() => setBibliotecaAberta(true)}
-        aoGuardarNaBiblioteca={guardarNaBiblioteca}
-      />
+          <Campo
+            rotulo="Título do orçamento"
+            name="titulo"
+            value={rascunho.titulo}
+            onChange={(e) => alterar('titulo', e.target.value)}
+            placeholder="Ex.: Reforma de banheiro social"
+            dica="Aparece em destaque, logo abaixo do cabeçalho."
+          />
 
-      <section className="flex flex-col gap-3">
-        <CabecalhoSecao
-          numero={3}
-          titulo="Pacotes"
-          selo={{ texto: 'o valor vem dos itens', tom: 'discreto' }}
-        />
-      </section>
-
-      <PainelPacotes
-        itens={rascunho.itens}
-        pacotes={rascunho.pacotes}
-        ativo={comPacotes}
-        aoMudar={mudarPacote}
-        aoDestacar={destacarPacote}
-      />
-
-      {avisosPacote.map((texto) => (
-        <Alerta key={texto} tom="aviso">
-          {texto}
-        </Alerta>
-      ))}
-
-      <section className="flex flex-col gap-3">
-        <CabecalhoSecao
-          numero={4}
-          titulo="Textos do orçamento"
-          selo={{ texto: 'Vem pronto', tom: 'pronto' }}
-          nota="Vieram do modelo do tipo de serviço. Toque para ajustar — o documento usa o que estiver aqui."
-        />
-
-        <TextosDobrados
-          textos={[
-            {
-              chave: 'textoEscopo',
-              rotulo: 'O que está incluso',
-              valor: rascunho.textoEscopo,
-              padrao: padroes.textoEscopo,
-              aoMudar: (v) => alterar('textoEscopo', v),
-            },
-            {
-              chave: 'textoExclusoes',
-              rotulo: 'O que não está incluso',
-              valor: rascunho.textoExclusoes,
-              padrao: padroes.textoExclusoes,
-              aoMudar: (v) => alterar('textoExclusoes', v),
-            },
-            {
-              chave: 'textoGarantia',
-              rotulo: 'Garantia',
-              valor: rascunho.textoGarantia,
-              padrao: padroes.textoGarantia,
-              aoMudar: (v) => alterar('textoGarantia', v),
-            },
-            {
-              chave: 'textoCondicoesPagamento',
-              rotulo: 'Condições de pagamento',
-              valor: rascunho.textoCondicoesPagamento,
-              padrao: padroes.textoCondicoesPagamento,
-              aoMudar: (v) => alterar('textoCondicoesPagamento', v),
-            },
-            {
-              chave: 'observacoes',
-              rotulo: 'Observações',
-              valor: rascunho.observacoes,
-              linhas: 6,
-              aoMudar: (v) => alterar('observacoes', v),
-            },
-          ]}
-        />
-
-        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="validadeDias" className="text-sm font-medium text-tinta">
-              Validade
+            <label htmlFor="tipoServico" className="text-sm font-medium text-tinta">
+              Tipo de serviço
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="validadeDias"
-                value={rascunho.validadeDias}
-                onChange={(e) => alterar('validadeDias', e.target.value.replace(/\D/g, ''))}
-                inputMode="numeric"
-                className="min-h-11 w-20 rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
-              />
-              <span className="text-sm text-tinta-suave">dias</span>
-            </div>
+            <select
+              id="tipoServico"
+              value={rascunho.tipoServico}
+              onChange={(e) => escolherTipoServico(e.target.value)}
+              className="min-h-11 w-full rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
+            >
+              <option value="">Escolher…</option>
+              {TIPOS_SERVICO.map((t) => (
+                <option key={t.valor} value={t.valor}>
+                  {t.rotulo}
+                </option>
+              ))}
+            </select>
             <p className="text-xs text-tinta-suave">
-              Vale até <span className="font-medium text-tinta">{validadeVisivel}</span>
+              Escolher o tipo traz escopo, exclusões, garantia e condições prontos — todos
+              editáveis.
             </p>
+
+            <label className="mt-1 flex items-start gap-2 text-xs text-tinta-suave">
+              <input
+                type="checkbox"
+                checked={substituirTextos}
+                onChange={(e) => setSubstituirTextos(e.target.checked)}
+                className="mt-0.5 size-4"
+              />
+              Substituir os textos ao trocar de serviço
+            </label>
           </div>
 
           <Campo
-            rotulo="Prazo de execução"
-            name="prazoExecucao"
-            value={rascunho.prazoExecucao}
-            onChange={(e) => alterar('prazoExecucao', e.target.value)}
-            placeholder="Ex.: 18 dias corridos"
+            rotulo="Local do serviço"
+            name="localServico"
+            value={rascunho.localServico}
+            onChange={(e) => alterar('localServico', e.target.value)}
+            placeholder="Endereço da obra"
           />
-        </div>
-      </section>
+        </section>
 
-      {/*
+        <section className="flex flex-col gap-3">
+          <CabecalhoSecao
+            numero={2}
+            titulo="Itens"
+            selo={{ texto: 'Obrigatório', tom: 'obrigatorio' }}
+          />
+        </section>
+
+        <EditorItens
+          itens={rascunho.itens}
+          aoMudar={mudarItem}
+          aoRemover={removerItem}
+          aoReordenar={reordenarItens}
+          aoAdicionar={adicionarItem}
+          aoAbrirBiblioteca={() => setBibliotecaAberta(true)}
+          aoGuardarNaBiblioteca={guardarNaBiblioteca}
+        />
+
+        <section className="flex flex-col gap-3">
+          <CabecalhoSecao
+            numero={3}
+            titulo="Pacotes"
+            selo={{ texto: 'o valor vem dos itens', tom: 'discreto' }}
+          />
+        </section>
+
+        <PainelPacotes
+          itens={rascunho.itens}
+          pacotes={rascunho.pacotes}
+          ativo={comPacotes}
+          aoMudar={mudarPacote}
+          aoDestacar={destacarPacote}
+        />
+
+        {avisosPacote.map((texto) => (
+          <Alerta key={texto} tom="aviso">
+            {texto}
+          </Alerta>
+        ))}
+
+        <section className="flex flex-col gap-3">
+          <CabecalhoSecao
+            numero={4}
+            titulo="Textos do orçamento"
+            selo={{ texto: 'Vem pronto', tom: 'pronto' }}
+            nota="Vieram do modelo do tipo de serviço. Toque para ajustar — o documento usa o que estiver aqui."
+          />
+
+          <TextosDobrados
+            textos={[
+              {
+                chave: 'textoEscopo',
+                rotulo: 'O que está incluso',
+                valor: rascunho.textoEscopo,
+                padrao: padroes.textoEscopo,
+                aoMudar: (v) => alterar('textoEscopo', v),
+              },
+              {
+                chave: 'textoExclusoes',
+                rotulo: 'O que não está incluso',
+                valor: rascunho.textoExclusoes,
+                padrao: padroes.textoExclusoes,
+                aoMudar: (v) => alterar('textoExclusoes', v),
+              },
+              {
+                chave: 'textoGarantia',
+                rotulo: 'Garantia',
+                valor: rascunho.textoGarantia,
+                padrao: padroes.textoGarantia,
+                aoMudar: (v) => alterar('textoGarantia', v),
+              },
+              {
+                chave: 'textoCondicoesPagamento',
+                rotulo: 'Condições de pagamento',
+                valor: rascunho.textoCondicoesPagamento,
+                padrao: padroes.textoCondicoesPagamento,
+                aoMudar: (v) => alterar('textoCondicoesPagamento', v),
+              },
+              {
+                chave: 'observacoes',
+                rotulo: 'Observações',
+                valor: rascunho.observacoes,
+                linhas: 6,
+                aoMudar: (v) => alterar('observacoes', v),
+              },
+            ]}
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="validadeDias" className="text-sm font-medium text-tinta">
+                Validade
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="validadeDias"
+                  value={rascunho.validadeDias}
+                  onChange={(e) => alterar('validadeDias', e.target.value.replace(/\D/g, ''))}
+                  inputMode="numeric"
+                  className="min-h-11 w-20 rounded-lg border border-borda bg-superficie px-3 text-base text-tinta outline-none focus:border-marca focus:ring-2 focus:ring-marca/20"
+                />
+                <span className="text-sm text-tinta-suave">dias</span>
+              </div>
+              <p className="text-xs text-tinta-suave">
+                Vale até <span className="font-medium text-tinta">{validadeVisivel}</span>
+              </p>
+            </div>
+
+            <Campo
+              rotulo="Prazo de execução"
+              name="prazoExecucao"
+              value={rascunho.prazoExecucao}
+              onChange={(e) => alterar('prazoExecucao', e.target.value)}
+              placeholder="Ex.: 18 dias corridos"
+            />
+          </div>
+        </section>
+
+        {/*
         UMA barra, não dois flutuantes.
 
         Antes havia um botão fixo de "Ver prévia" (z-30) por cima da faixa de
@@ -545,82 +577,101 @@ export function EditorOrcamento({
         dois entram na MESMA linha flex. Enviar ocupa o espaço restante,
         prévia tem largura própria — não há como se sobreporem.
       */}
-      <div
-        ref={barra}
-        className="
+        <div
+          ref={barra}
+          className="
           fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30
           border-t border-borda bg-superficie px-4 py-3
           lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:px-0 lg:py-0
         "
-      >
-        {pendencias.length > 0 ? (
-          <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 text-xs leading-snug text-tinta-suave lg:hidden">
-              Falta {pendencias.join(' e ')}.
-            </p>
-            <div className="hidden flex-1 lg:block">
-              <Alerta tom="aviso">
-                Rascunho salvo. Para enviar falta {pendencias.join(' e ')}.
-              </Alerta>
+        >
+          {pendencias.length > 0 ? (
+            <div className="flex items-center gap-3">
+              <p className="min-w-0 flex-1 text-xs leading-snug text-tinta-suave lg:hidden">
+                Falta {pendencias.join(' e ')}.
+              </p>
+              <div className="hidden flex-1 lg:block">
+                <Alerta tom="aviso">
+                  Rascunho salvo. Para enviar falta {pendencias.join(' e ')}.
+                </Alerta>
+              </div>
+              <BotaoPrevia aoAbrir={() => setPreviewAberto(true)} />
             </div>
-            <BotaoPrevia aoAbrir={() => setPreviewAberto(true)} />
-          </div>
-        ) : (
-          <div className="flex items-stretch gap-2">
-            <BotaoPrevia aoAbrir={() => setPreviewAberto(true)} />
-            {/*
+          ) : (
+            <div className="flex items-stretch gap-2">
+              <BotaoPrevia aoAbrir={() => setPreviewAberto(true)} />
+              {/*
               min-w-0 impede que o texto do botão force a linha a crescer e
               empurre a prévia para fora da tela em aparelho estreito.
             */}
-            <Botao
-              type="button"
-              tamanho="grande"
-              onClick={enviar}
-              disabled={enviando}
-              className="min-w-0 flex-1"
-            >
-              {enviando
-                ? 'Preparando…'
-                : rascunho.status === 'rascunho'
-                  ? 'Enviar orçamento'
-                  : 'Mandar de novo'}
-            </Botao>
-          </div>
-        )}
-      </div>
+              <Botao
+                type="button"
+                tamanho="grande"
+                onClick={enviar}
+                disabled={enviando}
+                className="min-w-0 flex-1"
+              >
+                {enviando
+                  ? 'Preparando…'
+                  : rascunho.status === 'rascunho'
+                    ? 'Enviar orçamento'
+                    : 'Mandar de novo'}
+              </Botao>
+            </div>
+          )}
+        </div>
 
-      <DialogoBiblioteca
-        aberto={bibliotecaAberta}
-        aoFechar={() => setBibliotecaAberta(false)}
-        itens={itensBiblioteca}
-        aoEscolher={usarDaBiblioteca}
-        aoRemover={(id) => setItensBiblioteca((atual) => atual.filter((i) => i.id !== id))}
-      />
-
-      {envio && (
-        <DialogoEnvio
-          aberto
-          aoFechar={() => setEnvio(null)}
-          rascunho={rascunho}
-          cliente={clienteSelecionado}
-          empresa={empresa}
-          token={envio.token}
-          reenvio={envio.reenvio}
-          urlBase={urlBase}
+        <DialogoBiblioteca
+          aberto={bibliotecaAberta}
+          aoFechar={() => setBibliotecaAberta(false)}
+          itens={itensBiblioteca}
+          aoEscolher={usarDaBiblioteca}
+          aoRemover={(id) => setItensBiblioteca((atual) => atual.filter((i) => i.id !== id))}
         />
-      )}
 
-      <Dialogo
-        aberto={previewAberto}
-        aoFechar={() => setPreviewAberto(false)}
-        titulo={`Orçamento nº ${String(rascunho.numero).padStart(3, '0')}`}
-        descricao="É o documento que o cliente recebe."
-      >
-        {/* <dialog> fechado mantém os filhos no DOM: sem esta guarda, o
+        {envio && (
+          <DialogoEnvio
+            aberto
+            aoFechar={() => setEnvio(null)}
+            rascunho={rascunho}
+            cliente={clienteSelecionado}
+            empresa={empresa}
+            token={envio.token}
+            reenvio={envio.reenvio}
+            urlBase={urlBase}
+          />
+        )}
+
+        <Dialogo
+          aberto={previewAberto}
+          aoFechar={() => setPreviewAberto(false)}
+          titulo={`Orçamento nº ${String(rascunho.numero).padStart(3, '0')}`}
+          descricao="É o documento que o cliente recebe."
+        >
+          {/* <dialog> fechado mantém os filhos no DOM: sem esta guarda, o
             documento era renderizado para uma tela invisível. */}
-        <div className="h-[70dvh]">{previewAberto && !ehDesktop && preview}</div>
-      </Dialogo>
-    </div>
+          {previaCabe ? (
+            <div
+              style={{ height: alturaVisor ?? undefined }}
+              className={alturaVisor ? '' : 'h-[70dvh]'}
+            >
+              {previewAberto && !ehDesktop && preview}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 py-2 text-center">
+              <p className="text-[15px] leading-relaxed text-tinta-leitura">
+                A prévia não cabe nesta tela. Baixe o PDF para ver o documento inteiro.
+              </p>
+              <BotaoBaixarPdf
+                rascunho={rascunho}
+                cliente={clienteSelecionado}
+                empresa={empresa}
+                larguraTotal
+              />
+            </div>
+          )}
+        </Dialogo>
+      </div>
 
       {/*
         Desktop: o documento acompanha a rolagem do editor, exatamente como
