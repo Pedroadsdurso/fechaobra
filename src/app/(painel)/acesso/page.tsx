@@ -12,6 +12,35 @@ export const metadata: Metadata = { title: 'Liberar acesso' }
 const LINK_COMPRA = 'https://pay.cakto.com.br/fkxh94h_1054119'
 
 /**
+ * O checkout já com o e-mail da conta preenchido.
+ *
+ * ===========================================================================
+ * ELIMINA O ERRO EM VEZ DE AVISAR SOBRE ELE
+ * ===========================================================================
+ * O acesso é liberado por e-mail: quem compra com um e cadastra com outro fica
+ * sem acesso e não tem como saber por quê. O aviso na tela ajuda, mas não
+ * resolve — o próprio Pedro errou testando, sabendo exatamente como funciona.
+ *
+ * A direção certa é a inversa da que parecia: em vez de o checkout devolver o
+ * e-mail para o app depois da compra, o APP manda o e-mail para o checkout
+ * antes. Quem chega nesta tela já está logado, então a conta é conhecida — e
+ * o campo do checkout chega preenchido com ela.
+ *
+ * A Cakto documenta os parâmetros `email` e `confirmEmail` na URL de checkout.
+ * `confirmEmail` importa: sem ele, o segundo campo fica vazio e a pessoa pode
+ * digitar outro, que é exatamente o erro que estamos evitando.
+ *
+ * Isto NÃO substitui o webhook. A liberação continua vindo só de
+ * purchase_approved — parâmetro de URL não libera ninguém.
+ * ===========================================================================
+ */
+function checkoutCom(email: string) {
+  if (!email) return LINK_COMPRA
+  const parametros = new URLSearchParams({ email, confirmEmail: email })
+  return `${LINK_COMPRA}?${parametros}`
+}
+
+/**
  * A tela de quem entrou mas ainda não comprou.
  *
  * Sem exagero de venda: a pessoa já criou conta, já está dentro, já sabe o
@@ -94,7 +123,7 @@ export default async function PaginaAcesso() {
 
       {/* Um <a> só, sem <button> dentro. Ver a nota em dialogo-envio.tsx. */}
       <a
-        href={LINK_COMPRA}
+        href={checkoutCom(email)}
         target="_blank"
         rel="noopener noreferrer"
         className={classesBotao({
