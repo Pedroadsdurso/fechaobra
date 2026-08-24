@@ -166,6 +166,12 @@ virar imagem, este comando falha com código 1.
   então qualquer registro que precise viajar junto vai de
   `fetch(..., { keepalive: true })`, nunca de `await`.
 
+  **`npm run verificar:whatsapp` quebra o build se alguém reintroduzir.** O
+  comentário sozinho não segurou: a correção nasceu em `dialogo-envio.tsx`, e
+  meses depois a página pública inteira e o botão de WhatsApp da lista ainda
+  tinham o defeito. Link interno com `target="_blank"` continua liberado — o
+  "Ver em PDF" abre noutra aba de propósito, para não custar o orçamento.
+
 - **Dúvida do cliente não é recusa, e não mexe no status.** O link público não
   tem botão de "Recusar" — tem "Tenho uma dúvida", e o motivo é capturado ali
   (migration 0010, evento `tipo='duvida'`). O orçamento continua `enviado` ou

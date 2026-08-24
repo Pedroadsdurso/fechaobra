@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { linkWhatsApp } from '@/modules/orcamentos/mensagem-whatsapp'
+import { linkWhatsApp, mensagemDeDuvida } from '@/modules/orcamentos/mensagem-whatsapp'
 import { somar } from '@/modules/orcamentos/calculos'
 import { Aceite } from '@/modules/publico/componentes/aceite'
 import { Proposta } from '@/modules/publico/componentes/proposta'
@@ -56,9 +56,11 @@ export default async function PaginaPublica({ params }: { params: Promise<{ toke
 
   if (!publico) notFound()
 
+  // O genérico: serve à faixa de vencido e ao pós-aceite. Os específicos por
+  // motivo são montados no Aceite, porque dependem do que o cliente escolher.
   const contatoWhatsApp = linkWhatsApp(
     publico.telefonePrestador,
-    `Oi! Recebi o orçamento nº ${String(publico.numero).padStart(3, '0')} e queria falar sobre ele.`,
+    mensagemDeDuvida(publico.numero, 'generico'),
   )
 
   return (
@@ -74,8 +76,7 @@ export default async function PaginaPublica({ params }: { params: Promise<{ toke
           </p>
           <a
             href={contatoWhatsApp}
-            target="_blank"
-            rel="noopener noreferrer"
+            rel="noopener"
             className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-atencao-forte px-4 text-sm font-medium text-white"
           >
             Pedir orçamento atualizado
@@ -91,6 +92,8 @@ export default async function PaginaPublica({ params }: { params: Promise<{ toke
         nomeCliente={publico.cliente?.nome ?? ''}
         enderecoCliente={publico.cliente?.endereco ?? ''}
         linkDuvida={contatoWhatsApp}
+        numeroOrcamento={publico.numero}
+        telefonePrestador={publico.telefonePrestador}
         nomePrestador={publico.nomePrestador}
         expirado={publico.expirado}
         jaAceito={publico.status === 'aceito'}

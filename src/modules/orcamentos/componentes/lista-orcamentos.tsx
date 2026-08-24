@@ -301,8 +301,7 @@ function Cartao({
         {contato && (
           <a
             href={contato}
-            target="_blank"
-            rel="noopener noreferrer"
+            rel="noopener"
             className="fo-toque flex min-h-11 flex-1 items-center justify-center rounded-lg bg-marca px-3 text-sm font-bold whitespace-nowrap text-white"
           >
             WhatsApp

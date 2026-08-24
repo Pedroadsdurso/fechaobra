@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run verificar:fronteira && next build",
+    "build": "npm run verificar:fronteira && npm run verificar:whatsapp && next build",
     "start": "next start",
     "lint": "eslint",
     "verificar:fronteira": "node scripts/verificar-fronteira.mjs",
@@ -15,7 +15,8 @@
     "doc:png": "node scripts/pdf-para-png.mjs",
     "doc:verificar": "node scripts/verificar-pdf.mjs",
     "doc:imagens-mock": "node scripts/gerar-mock-imagens.mjs",
-    "verificar:modelo": "node scripts/verificar-modelo-ia.mjs"
+    "verificar:modelo": "node scripts/verificar-modelo-ia.mjs",
+    "verificar:whatsapp": "node scripts/verificar-whatsapp.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

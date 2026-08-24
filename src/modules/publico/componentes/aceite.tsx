@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 import { rotuloDocumento, situacaoDocumento } from '@/lib/documento-br'
+import { linkWhatsApp, mensagemDeDuvida } from '@/modules/orcamentos/mensagem-whatsapp'
 import { LIMITE_MOTIVO_TEXTO, MOTIVOS_DUVIDA, type MotivoDuvida } from '@/modules/publico/motivos'
 import { formatarCnpjCpf, formatarMoeda } from '@/lib/utils'
 
@@ -31,6 +32,8 @@ export function Aceite({
   nomeCliente,
   enderecoCliente,
   linkDuvida,
+  numeroOrcamento,
+  telefonePrestador,
   nomePrestador,
   expirado,
   jaAceito,
@@ -41,6 +44,8 @@ export function Aceite({
   nomeCliente: string
   enderecoCliente: string
   linkDuvida: string
+  numeroOrcamento: number
+  telefonePrestador: string
   nomePrestador: string
   expirado: boolean
   jaAceito: boolean
@@ -77,6 +82,17 @@ export function Aceite({
    * que é infinitamente melhor que perder a conversa.
    * ===========================================================================
    */
+  /**
+   * O link do WhatsApp já com o assunto dentro.
+   *
+   * Montado no render, não no clique: o href precisa estar pronto ANTES do
+   * toque para a navegação acontecer dentro do gesto. Calcular no onClick
+   * traria de volta o problema que as âncoras resolvem.
+   */
+  function linkCom(motivo: MotivoDuvida, texto = '') {
+    return linkWhatsApp(telefonePrestador, mensagemDeDuvida(numeroOrcamento, motivo, texto))
+  }
+
   function registrarDuvida(motivo: MotivoDuvida, texto = '') {
     fetch(`/api/p/${token}/duvida`, {
       method: 'POST',
@@ -272,7 +288,7 @@ export function Aceite({
             {MOTIVOS_DUVIDA.filter((m) => m.valor !== 'outro').map((m) => (
               <a
                 key={m.valor}
-                href={linkDuvida}
+                href={linkCom(m.valor)}
                 rel="noopener"
                 onClick={() => registrarDuvida(m.valor)}
                 className={opcao}
@@ -304,7 +320,7 @@ export function Aceite({
             </span>
 
             <a
-              href={linkDuvida}
+              href={linkCom('outro', motivoTexto)}
               rel="noopener"
               onClick={() => registrarDuvida('outro', motivoTexto)}
               className="flex min-h-14 items-center justify-center rounded-xl bg-tinta text-base font-semibold text-white"

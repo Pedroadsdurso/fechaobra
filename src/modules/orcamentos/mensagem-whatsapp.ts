@@ -27,6 +27,8 @@
  * digitada pelo prestador, porque é ele quem está mandando.
  */
 
+import type { MotivoDuvida } from '@/modules/publico/motivos'
+
 export type DadosMensagem = {
   /** Primeiro nome do cliente. Vazio quando não há cliente. */
   primeiroNomeCliente: string
@@ -67,9 +69,7 @@ function minusculaInicial(texto: string) {
 }
 
 export function montarMensagem(dados: DadosMensagem) {
-  const saudacao = dados.primeiroNomeCliente
-    ? `Oi, ${dados.primeiroNomeCliente}!`
-    : 'Oi!'
+  const saudacao = dados.primeiroNomeCliente ? `Oi, ${dados.primeiroNomeCliente}!` : 'Oi!'
 
   // "Aqui é o José Antônio, da Andrade Elétrica" soa como pessoa.
   // "Aqui é a Andrade Elétrica" soa como empresa disparando mensagem.
@@ -90,6 +90,58 @@ export function montarMensagem(dados: DadosMensagem) {
     '',
     'Qualquer dúvida, me chama.',
   ].join('\n')
+}
+
+/**
+ * A mensagem que o CLIENTE manda quando toca em "Tenho uma dúvida".
+ *
+ * ===========================================================================
+ * PRIMEIRA PESSOA DO CLIENTE, NÃO DO PRESTADOR
+ * ===========================================================================
+ * Todas as outras mensagens deste arquivo são escritas pelo prestador. Esta
+ * não: quem toca no botão é o cliente, e o WhatsApp vai abrir com a mensagem
+ * já digitada NA CAIXA DELE. "Segue o orçamento" ou "posso explicar qualquer
+ * ponto" sairiam da boca errada.
+ *
+ * Tom de quem escreve no WhatsApp, não de quem preenche formulário. "Queria
+ * falar sobre o valor", não "gostaria de esclarecer questões referentes ao
+ * investimento". Valem as mesmas regras do resto do arquivo: sem emoji, sem
+ * linguagem de sistema, e sem o valor do orçamento.
+ * ===========================================================================
+ *
+ * POR QUE ISTO EXISTE: antes, os cinco caminhos mandavam a mesma frase
+ * genérica. O motivo ficava registrado no banco e não chegava na conversa — o
+ * prestador recebia "queria falar sobre ele" e tinha que perguntar o que já
+ * havia sido respondido. O melhor do fluxo se perdia no último metro.
+ */
+export function mensagemDeDuvida(numero: number, motivo: MotivoDuvida | 'generico', texto = '') {
+  const ref = `nº ${String(numero).padStart(3, '0')}`
+  const abertura = `Oi! Recebi o orçamento ${ref}.`
+
+  switch (motivo) {
+    case 'preco':
+      return `${abertura} Queria falar sobre o valor.`
+    case 'prazo':
+      return `${abertura} Queria falar sobre o prazo.`
+    case 'escopo':
+      return `${abertura} Fiquei com dúvida sobre o que está incluso.`
+    case 'outro': {
+      /*
+        O texto vai como o cliente escreveu — sem maiúscula forçada, sem ponto
+        final acrescentado. Corrigir a frase dele faria a mensagem parecer
+        gerada, que é exatamente o que este arquivo inteiro evita.
+
+        Só o espaço em branco é normalizado: quebra de linha no meio de um
+        texto de 200 caracteres vira uma mensagem esquisita no WhatsApp.
+      */
+      const limpo = texto.replace(/\s+/g, ' ').trim()
+      return limpo ? `${abertura} ${limpo}` : `${abertura} Queria falar sobre ele.`
+    }
+    // "Só quero falar": a pessoa escolheu não dizer. Inventar um assunto aqui
+    // seria colocar palavra na boca dela.
+    default:
+      return `Oi! Recebi o orçamento ${ref} e queria falar sobre ele.`
+  }
 }
 
 /**
