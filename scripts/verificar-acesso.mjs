@@ -33,7 +33,7 @@
  */
 
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -47,6 +47,47 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const marca = Date.now()
 const LIBERADA = `gate-lib-${marca}@fechaobra.test`
 const BLOQUEADA = `gate-sem-${marca}@fechaobra.test`
+/*
+  A conta do terceiro caso: comprou o FechaObra e MAIS NADA.
+
+  É o cliente mais comum que vai existir — quem passou pelo checkout sem
+  marcar nenhuma caixinha. Até agora nenhum teste cobria essa conta, e foi
+  exatamente por isso que "a IA está aberta para quem não pagou o bump" não
+  teve como ser respondido sem alguém abrir o banco na mão.
+*/
+const SO_VITALICIO = `gate-ia-${marca}@fechaobra.test`
+
+/** O `d` do IconeCadeado. É por ele que se conta cadeado no HTML. */
+const CADEADO = 'M8 10.5V7.5a4 4 0 0 1 8 0v3'
+
+/*
+  As duas ações de IA se identificam sozinhas.
+
+  Não há como saber, de fora, qual `$ACTION_ID_…` do HTML é qual função — e
+  chutar seria montar um teste que fica verde sobre a ação errada. Mas as duas
+  recusam entrada inválida com uma frase própria, ANTES de falar com o Gemini.
+  Então: manda-se um corpo propositalmente inválido para cada id com a conta
+  que TEM o recurso, e quem responder a frase é a função procurada.
+
+  De quebra, nenhuma chamada deste teste chega ao Gemini — não gasta cota nem
+  depende de rede externa para ficar verde.
+*/
+const ACOES_IA = [
+  {
+    nome: 'extrairItensDoTexto',
+    recurso: 'ia_orcamento',
+    // descricao com menos de 10 caracteres: recusada na validação.
+    corpo: JSON.stringify([{ tipoServico: 'pintura', descricao: 'curto' }]),
+    frase: 'Escreva um pouco mais sobre o serviço',
+  },
+  {
+    nome: 'gerarTextosDoOrcamento',
+    recurso: 'ia_textos',
+    // itens vazio: recusado na validação.
+    corpo: JSON.stringify([{ tipoServico: 'pintura', titulo: 'Teste', itens: [] }]),
+    frase: 'Inclua ao menos um item',
+  },
+]
 
 const falhas = []
 const conferir = (nome, passou, detalhe) => {
@@ -181,21 +222,45 @@ async function principal() {
 
     contas.bloqueada = { email: BLOQUEADA, cookie: await criarSessao(BLOQUEADA) }
     contas.liberada = { email: LIBERADA, cookie: await criarSessao(LIBERADA) }
+    contas.soVitalicio = { email: SO_VITALICIO, cookie: await criarSessao(SO_VITALICIO) }
 
     const { data: us } = await admin.auth.admin.listUsers({ perPage: 1000 })
     for (const c of Object.values(contas)) {
       c.userId = us.users.find((u) => u.email === c.email)?.id
     }
-    await admin.from('liberacoes').insert({
-      email: LIBERADA,
-      user_id: contas.liberada.userId,
-      status: 'ativa',
-      pedido_id: `gate-${marca}`,
-    })
+    await admin.from('liberacoes').insert([
+      {
+        email: LIBERADA,
+        user_id: contas.liberada.userId,
+        status: 'ativa',
+        pedido_id: `gate-${marca}`,
+      },
+      /*
+        A terceira conta recebe o vitalício e NADA em recursos_liberados. É a
+        diferença inteira entre ela e a `liberada`, que ganha os dois módulos
+        de IA logo abaixo — e é o que torna a comparação entre as duas uma
+        prova, e não uma coincidência.
+      */
+      {
+        email: SO_VITALICIO,
+        user_id: contas.soVitalicio.userId,
+        status: 'ativa',
+        pedido_id: `gate-ia-${marca}`,
+      },
+    ])
+    await admin.from('recursos_liberados').insert(
+      ['ia_textos', 'ia_orcamento'].map((recurso) => ({
+        email: LIBERADA,
+        user_id: contas.liberada.userId,
+        recurso,
+        status: 'ativa',
+        pedido_id: `gate-${marca}`,
+      })),
+    )
 
     conferir(
-      'preparo: duas sessões reais',
-      Boolean(contas.liberada.cookie && contas.bloqueada.cookie && contas.liberada.userId),
+      'preparo: três sessões reais',
+      Object.values(contas).every((c) => c.cookie && c.userId),
       'cookies httpOnly capturados via CDP',
     )
 
@@ -301,6 +366,169 @@ async function principal() {
       criouDepois > antesSem && rDepois.status < 400,
       `orçamentos ${antesSem} -> ${criouDepois}, http=${rDepois.status} — só a liberação mudou`,
     )
+    // =====================================================================
+    console.log('\n  === MÓDULO DE IA: SÓ O VITALÍCIO NÃO ABRE A IA ===\n')
+    // =====================================================================
+    /*
+      O caso que faltava, e que deixou uma dúvida de produção sem resposta:
+      a conta que comprou o FechaObra e nenhum order bump.
+
+      As duas contas comparadas aqui são IDÊNTICAS em tudo — mesma tela, mesmo
+      vitalício ativo, mesma sessão real — menos por duas linhas em
+      `recursos_liberados`. Qualquer diferença de comportamento entre elas só
+      pode vir dessas duas linhas.
+    */
+    const editorDe = async (conta) => {
+      await chamar(conta.cookie) // cria um orçamento para haver o que abrir
+      const { data: orcamentos } = await admin
+        .from('orcamentos')
+        .select('id')
+        .eq('user_id', conta.userId)
+        .limit(1)
+      const id = orcamentos?.[0]?.id
+      if (!id) throw new Error(`não consegui criar orçamento para ${conta.email}`)
+      const r = await fetch(`${BASE}/painel/orcamentos/${id}`, {
+        headers: { cookie: conta.cookie },
+        redirect: 'manual',
+      })
+      return { id, status: r.status, html: await r.text() }
+    }
+
+    const editorSem = await editorDe(contas.soVitalicio)
+    const editorCom = await editorDe(contas.liberada)
+
+    conferir(
+      'CONTROLE: o editor abre para as duas contas',
+      editorSem.status === 200 && editorCom.status === 200,
+      `só-vitalício http=${editorSem.status}, com-módulos http=${editorCom.status}`,
+    )
+
+    const cadeados = (html) => html.split(CADEADO).length - 1
+
+    /*
+      Dois cadeados, não "pelo menos um": são dois botões — "Descrever em
+      texto" na seção de itens e "Escrever com IA" na de textos. Afirmar
+      `> 0` deixaria passar o dia em que um dos dois perdesse a guarda, que é
+      precisamente o defeito relatado.
+    */
+    conferir(
+      'só-vitalício: os DOIS botões de IA vêm com cadeado',
+      cadeados(editorSem.html) === 2,
+      `${cadeados(editorSem.html)} cadeado(s) no HTML — esperado 2`,
+    )
+    conferir(
+      '  PROVA: a mesma tela não tem cadeado para quem tem os módulos',
+      cadeados(editorCom.html) === 0,
+      `${cadeados(editorCom.html)} cadeado(s) — só as duas linhas de recursos_liberados mudaram`,
+    )
+
+    // ---- as ações, sem passar pela interface -----------------------------
+    /*
+      DE ONDE SAEM OS IDS DAS AÇÕES DO EDITOR.
+
+      Do manifest do build, e não do HTML — medido: a página do editor não
+      inlineia nenhum `$ACTION_ID_`, e os chunks do cliente também não. Só
+      `/painel/orcamentos` inlineia, que é por isso que a primeira metade
+      deste arquivo consegue pescar de lá.
+
+      Isso NÃO enfraquece o teste, porque o id é só o endereço: a chamada
+      continua sendo HTTP de verdade contra o BASE, com cookie de verdade, e
+      cada id é confirmado pela resposta antes de virar prova. O que o
+      manifest evita é chutar qual id é qual função.
+
+      A dependência é o build local ser o mesmo que está no BASE. Se não for,
+      nenhum candidato responde a frase esperada e o teste FALHA dizendo isso
+      — nunca fica verde por não ter encontrado nada.
+    */
+    const manifest = 'server-reference-manifest.json'
+    const rota = 'app/(painel)/painel/orcamentos/[id]/page'
+    let ids = []
+    try {
+      const bruto = JSON.parse(readFileSync(join('.next', 'server', manifest), 'utf8'))
+      ids = Object.entries(bruto.node ?? {})
+        .filter(([, v]) => Object.keys(v.workers ?? {}).some((w) => w === rota))
+        .map(([id]) => id)
+    } catch {
+      /* sem build local: o conferir abaixo explica */
+    }
+    conferir(
+      'ids das ações do editor lidos do manifest do build',
+      ids.length > 0,
+      ids.length
+        ? `${ids.length} candidato(s) em ${rota}`
+        : `.next/server/${manifest} ausente ou sem a rota — rode npm run build antes`,
+    )
+
+    const chamarAcao = async (id, cookie, corpo) =>
+      fetch(`${BASE}/painel/orcamentos/${editorCom.id}`, {
+        method: 'POST',
+        headers: { cookie, 'Next-Action': id, 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: corpo,
+        redirect: 'manual',
+      })
+
+    for (const acao of ACOES_IA) {
+      // Quem responder a frase de validação é a função procurada.
+      let alvo = null
+      for (const id of ids) {
+        const r = await chamarAcao(id, contas.liberada.cookie, acao.corpo)
+        if (r.status < 400 && (await r.text()).includes(acao.frase)) {
+          alvo = id
+          break
+        }
+      }
+
+      conferir(
+        `${acao.nome}: identificada pela própria validação`,
+        Boolean(alvo),
+        alvo ? `${alvo.slice(0, 16)}… respondeu "${acao.frase}"` : 'NÃO ACHEI — o resto não vale',
+      )
+      if (!alvo) continue
+
+      const rAtaque = await chamarAcao(alvo, contas.soVitalicio.cookie, acao.corpo)
+      const corpoAtaque = await rAtaque.text()
+
+      conferir(
+        `  ATAQUE: ${acao.nome} recusa a conta sem ${acao.recurso}`,
+        rAtaque.status >= 400,
+        `http=${rAtaque.status}`,
+      )
+
+      /*
+        AFIRME SOBRE O MECANISMO.
+
+        "http >= 400" sozinho não diz QUEM barrou. Mas `exigirRecurso` é a
+        PRIMEIRA linha da ação, antes da validação de entrada — então a conta
+        sem o módulo não pode ter chegado à frase de validação. Se ela
+        aparecer aqui, a guarda rodou depois da validação, ou não rodou.
+      */
+      conferir(
+        `  parou na guarda, antes de validar a entrada`,
+        !corpoAtaque.includes(acao.frase),
+        `resposta não contém "${acao.frase}" — exigirRecurso é a primeira linha`,
+      )
+
+      /*
+        PROVA CAUSAL. Libero o módulo para a MESMA conta e repito a MESMA
+        chamada, com o MESMO cookie e o MESMO id. Se agora ela chega à
+        validação, a única variável que mudou foi a linha em
+        recursos_liberados — e o que barrava era ela.
+      */
+      await admin.from('recursos_liberados').insert({
+        email: SO_VITALICIO,
+        user_id: contas.soVitalicio.userId,
+        recurso: acao.recurso,
+        status: 'ativa',
+        pedido_id: `gate-prova-${marca}`,
+      })
+      const rDepois = await chamarAcao(alvo, contas.soVitalicio.cookie, acao.corpo)
+      const corpoDepois = await rDepois.text()
+      conferir(
+        `  PROVA: a MESMA chamada passa depois de liberar ${acao.recurso}`,
+        rDepois.status < 400 && corpoDepois.includes(acao.frase),
+        `http=${rDepois.status}, agora chega à validação — só o módulo mudou`,
+      )
+    }
   } finally {
     ws.close()
     chrome.kill()
@@ -314,6 +542,8 @@ async function principal() {
       await admin.from('orcamentos').delete().eq('user_id', c.userId)
       await admin.from('clientes').delete().eq('user_id', c.userId)
       await admin.from('liberacoes').delete().eq('email', c.email)
+      // Sem esta linha o teste deixaria módulo órfão no banco a cada rodada.
+      await admin.from('recursos_liberados').delete().eq('email', c.email)
       await admin.auth.admin.deleteUser(c.userId)
     }
   }
