@@ -1,0 +1,4 @@
+#!/bin/sh
+# Gate de hidratação. Ver scripts/exige-hidratacao.mjs.
+# Ligado por: git config core.hooksPath .githooks
+exec node scripts/exige-hidratacao.mjs

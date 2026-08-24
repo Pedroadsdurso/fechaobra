@@ -45,3 +45,4 @@ next-env.d.ts
 
 # estado local do Supabase CLI (ref do projeto, versão do binário)
 supabase/.temp/
+.hidratacao-ok

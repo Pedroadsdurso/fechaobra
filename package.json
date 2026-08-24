@@ -17,7 +17,8 @@
     "doc:imagens-mock": "node scripts/gerar-mock-imagens.mjs",
     "verificar:modelo": "node scripts/verificar-modelo-ia.mjs",
     "verificar:whatsapp": "node scripts/verificar-whatsapp.mjs",
-    "verificar:saneamento": "node scripts/verificar-saneamento.mjs"
+    "verificar:saneamento": "node scripts/verificar-saneamento.mjs",
+    "exige:hidratacao": "node scripts/exige-hidratacao.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

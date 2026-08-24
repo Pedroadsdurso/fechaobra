@@ -59,8 +59,8 @@
  * para APAGAR a conta no fim — criar é pela tela, como um usuário faria.
  */
 
-import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { execSync, spawn } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -509,6 +509,29 @@ async function principal() {
     console.error('  Isto não aparece em print, no tsc, no lint nem no peso do bundle.')
     console.error('  O HTML está certo e o JavaScript foi baixado — ele só não montou.\n')
     process.exit(1)
+  }
+
+  /*
+    Carimbo para o gate do pre-push. Guarda O QUE foi provado — commit e alvo —
+    não só "passou": verde de ontem, noutro commit, não vale para o de hoje.
+    Ver scripts/exige-hidratacao.mjs.
+  */
+  try {
+    writeFileSync(
+      '.hidratacao-ok',
+      JSON.stringify(
+        {
+          em: new Date().toISOString(),
+          base: BASE,
+          commit: execSync('git rev-parse HEAD').toString().trim(),
+          rodadas: ROTAS.length + 1,
+        },
+        null,
+        2,
+      ) + '\n',
+    )
+  } catch {
+    /* sem git ou sem permissão de escrita: o teste vale do mesmo jeito */
   }
 
   console.log('\n  todas as rotas hidratam e respondem a clique\n')
