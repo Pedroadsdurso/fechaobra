@@ -267,6 +267,32 @@ valor** — não existe a casa onde a regra seria desobedecida, e o item chega n
 editor com `valorUnitario` vazio. Quem acrescentar `valorUnitario` ao schema
 "para adiantar" estará desfazendo a única garantia real que existe ali.
 
+### O check de hidratação é gate de push, não lembrete
+
+Mudança em editor, auth ou sessão **não sobe sem prova de que o painel ainda
+hidrata**. O hook de `pre-push` chama `scripts/exige-hidratacao.mjs`, que olha o
+que está subindo e, se tocar em
+
+```
+src/modules/orcamentos/componentes/   src/app/(painel)/
+src/modules/auth/                     src/app/auth/
+src/lib/supabase/                     src/componentes/layout/
+src/componentes/ui/                   src/proxy.ts, src/app/layout.tsx
+```
+
+exige um carimbo `.hidratacao-ok` **do mesmo commit**. O carimbo só é escrito
+quando as seis rodadas passam. Verde de ontem, noutro commit, não vale: o que se
+quer saber é se o código que está subindo agora hidrata.
+
+```
+git config core.hooksPath .githooks      # uma vez, por clone
+BASE=https://app.fechaobra.online npm run verificar:hidratacao
+```
+
+O gate **não roda o teste sozinho** de propósito: rodar exige servidor de pé e
+cria conta descartável no banco. Isso é decisão de quem está empurrando, não de
+um hook silencioso — ele só recusa avançar sem a prova.
+
 ### Página oculta não hidrata — e é armadilha de teste, não do produto
 
 **O scheduler do React adia trabalho não urgente enquanto `document.visibilityState`
