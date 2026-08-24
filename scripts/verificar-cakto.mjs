@@ -360,11 +360,26 @@ async function principal() {
     logLevel: 'warning',
   })
 
+  await build({
+    entryPoints: ['src/lib/cakto/produtos.ts'],
+    outfile: `${TEMPORARIO}/cakto-produtos.mjs`,
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    target: 'node22',
+    alias: { '@': './src' },
+    conditions: ['react-server', 'node', 'import'],
+    logLevel: 'warning',
+  })
+
   const { processarEventoCakto } = await import(
     pathToFileURL(`${TEMPORARIO}/cakto.mjs`).href
   )
   const { lerEvento, linhasDoEvento } = await import(
     pathToFileURL(`${TEMPORARIO}/cakto-payload.mjs`).href
+  )
+  const { PRODUTOS, checkoutDoRecurso } = await import(
+    pathToFileURL(`${TEMPORARIO}/cakto-produtos.mjs`).href
   )
 
   const avisos = []
@@ -778,6 +793,114 @@ async function principal() {
         `vitalício ativo + ${b.tabelas.recursos_liberados.length} módulos`,
       )
     }
+    // -----------------------------------------------------------------------
+    console.log('\n11. bump comprado avulso libera o módulo igual')
+    // -----------------------------------------------------------------------
+    {
+      avisos.length = 0
+
+      /*
+        O MESMO produto Contrato e Recibo, comprado na página própria dele em
+        vez de marcado no checkout do FechaObra. Três coisas mudam no payload,
+        e nenhuma delas pode mudar o desfecho:
+
+          offer_type    'orderbump' -> 'main'
+          parent_order  '8X7Zs1S'   -> ''      (não é filho de checkout nenhum)
+          id            pedido novo, porque é outra compra
+
+        O que NÃO muda é `product.id`, e é só por ele que o mapa casa. Se algum
+        dia alguém "simplificar" o casamento para olhar `offer_type`, é este
+        teste que fica vermelho — e o sintoma em produção seria quem comprasse
+        avulso pagar e não receber.
+      */
+      const avulso = item({
+        id: 'c0ffee00-1111-2222-3333-444444444444',
+        produtoId: '478dc215-b46e-46f0-80a2-efe86b77b1ab',
+        nome: 'Contrato e Recibo',
+        oferta: '3ed238w',
+        preco: 19.9,
+        offerType: 'main',
+        parentOrder: '',
+        refId: 'AvUls01',
+      })
+
+      const b = bancoFalso()
+      const r = await processarEventoCakto(
+        b.cliente,
+        'purchase_approved',
+        evento('purchase_approved', [avulso]),
+      )
+
+      const recursos = porRecurso(b)
+      conferir(
+        'contratos liberado, apesar de offer_type "main"',
+        b.tabelas.recursos_liberados.length === 1 && recursos.contratos?.status === 'ativa',
+        `o mapa casa por product.id 478dc215, não por offer_type`,
+      )
+      conferir(
+        'carimbado com o pedido da compra avulsa',
+        recursos.contratos?.pedido_id === avulso.id,
+        `pedido_id = ${recursos.contratos?.pedido_id?.slice(0, 8)} (não ${CONTRATO.id.slice(0, 8)}, o do bump)`,
+      )
+      conferir(
+        'nenhuma liberação vitalícia',
+        b.tabelas.liberacoes.length === 0,
+        `${b.tabelas.liberacoes.length} liberação — 'main' não quer dizer FechaObra`,
+      )
+      /*
+        A asserção do teste 8 vigia o produto PRINCIPAL chegando como bump.
+        Aqui é o inverso — um bump chegando como main — e é rotina, não
+        anomalia. Se ela disparasse, todo comprador avulso viraria linha de
+        revisão, e a lista de revisão deixaria de ser lida.
+      */
+      conferir(
+        'a asserção do FechaObra não dispara',
+        avisos.length === 0 && r.linhas[0].processado,
+        avisos.join(' | ') || 'nenhum aviso, item processado',
+      )
+      conferir(
+        'sem parent_order, como toda compra avulsa',
+        lerEvento(evento('purchase_approved', [avulso])).itens[0].parentOrder === null,
+        'parent_order "" virou null',
+      )
+    }
+
+    // -----------------------------------------------------------------------
+    console.log('\n12. todo recurso com cadeado tem para onde mandar a pessoa')
+    // -----------------------------------------------------------------------
+    {
+      /*
+        O cadeado do editor só oferece o botão de compra quando
+        `checkoutDoRecurso` devolve link; com link vazio ele diz "ainda não
+        está à venda". Os dois recursos de IA estavam exatamente assim por um
+        commit — o catálogo tinha os UUIDs certos e os links vazios, porque o
+        `checkoutUrl` do payload de um bump aponta para o checkout onde a
+        compra foi feita, e não para a página do produto.
+
+        Nenhuma prova de webhook pegava isso: a liberação funcionava. O que
+        quebrava era a venda.
+      */
+      const comCadeado = ['ia_textos', 'ia_orcamento']
+      const links = comCadeado.map((r) => [r, checkoutDoRecurso(r, 'quem@compra.test')])
+      conferir(
+        'os recursos de IA levam a um checkout',
+        links.every(([, url]) => url.startsWith('https://pay.cakto.com.br/')),
+        links.map(([r, url]) => `${r} → ${url.split('?')[0]}`).join(' · '),
+      )
+      conferir(
+        'com o e-mail da conta já preenchido',
+        links.every(([, url]) => url.includes('email=quem%40compra.test&confirmEmail=')),
+        'email e confirmEmail na URL — comprar com outro e-mail é o suporte nº 1',
+      )
+
+      const vendidos = PRODUTOS.filter((p) => p.recursos.length > 0)
+      conferir(
+        'nenhum produto do catálogo ficou sem link',
+        vendidos.every((p) => p.linkCheckout.includes(p.oferta)),
+        vendidos.map((p) => p.oferta).join(', '),
+      )
+    }
+
   } finally {
     console.warn = warnOriginal
   }

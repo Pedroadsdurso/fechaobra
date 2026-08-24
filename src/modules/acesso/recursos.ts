@@ -35,7 +35,11 @@ import { exigirAcesso } from './guarda'
  * mudar bastante.
  */
 export type Recurso =
-  // Dos três order bumps do checkout do FechaObra.
+  /*
+    Dos três produtos que são order bump no checkout do FechaObra e também
+    oferta avulsa com página própria. Quem não marcou a caixinha na compra
+    pode comprar depois pelo cadeado, dentro do editor.
+  */
   | 'ia_textos'
   | 'ia_orcamento'
   | 'contratos'

@@ -69,7 +69,15 @@ export const PRODUTO_PRINCIPAL = '6ba610fb-1bc6-46d2-919f-4db497b6da84'
 export type Produto = {
   /** `product.id` — o UUID. É por aqui que o casamento acontece. */
   produtoId: string
-  /** Só para eu reconhecer no log e no painel. Não participa da decisão. */
+  /**
+   * Só para eu reconhecer no log e no painel. Não participa da decisão.
+   *
+   * É o nome do produto, e nada além dele. Já foi 'bump — Contrato e Recibo',
+   * e estava errado: o MESMO produto é vendido como order bump no checkout do
+   * FechaObra e como oferta avulsa na página dele. A nota do log diria "bump"
+   * numa compra avulsa. Como o produto foi vendido está em `offer_type`, que
+   * é onde essa pergunta tem resposta verdadeira em cada evento.
+   */
   apelido: string
   /** Os recursos que uma compra aprovada deste produto libera. */
   recursos: Recurso[]
@@ -91,21 +99,25 @@ export type Produto = {
    * webhook não reconhece o que voltou, ou o contrário.
    *
    * ===========================================================================
-   * ORDER BUMP NÃO TEM CHECKOUT PRÓPRIO — E ISSO NÃO É CAMPO ESQUECIDO
+   * NÃO LEIA O `checkoutUrl` DO PAYLOAD PARA DESCOBRIR ISTO
    * ===========================================================================
-   * Conferido no payload real: os três bumps chegam com
-   * `checkoutUrl: 'https://pay.cakto.com.br/fkxh94h_1054119'`, que é o
-   * checkout DO FECHAOBRA. Eles não são páginas de venda; são caixas marcadas
-   * dentro da página do principal.
+   * Foi o erro que esta anotação existe para não deixar acontecer de novo.
    *
-   * Por isso o campo fica vazio nos três, e NÃO recebe o link do principal.
-   * Quem vê o cadeado do recurso de IA dentro do editor já comprou o
-   * FechaObra — mandar essa pessoa para o checkout de R$ 47 a faria pagar o
-   * vitalício de novo para tentar comprar um bump de R$ 29,90.
+   * No evento 8X7Zs1S os três order bumps chegam com
+   * `checkoutUrl: 'https://pay.cakto.com.br/fkxh94h_1054119'` — o checkout do
+   * FechaObra. É tentador concluir daí que bump não tem página própria. A
+   * conclusão está errada: o campo diz ONDE AQUELA COMPRA FOI FEITA, e aquela
+   * compra foi feita no checkout do principal, com as caixas marcadas.
    *
-   * Vazio faz a tela dizer "ainda não está à venda", que é verdade hoje: não
-   * há como comprar o bump depois do checkout. Para haver, o bump precisa
-   * virar oferta avulsa na Cakto — e aí é só preencher o link aqui.
+   * Os três TÊM oferta avulsa na Cakto, com página e link próprios, e é por
+   * isso que o campo está preenchido nos sete. Comprado avulso, o mesmo
+   * produto chega com `offer_type: 'main'` em vez de 'orderbump' — e nada no
+   * casamento muda, porque ele é pelo `product.id`. Ver a prova 11 em
+   * scripts/verificar-cakto.mjs.
+   *
+   * Vazio aqui continua querendo dizer "não está à venda", e a tela do cadeado
+   * o trata assim. Sobrou para os recursos previstos que ainda não têm produto
+   * nenhum — 'perfil_publico' e 'relatorio_mensal'.
    * ===========================================================================
    */
   linkCheckout: string
@@ -133,46 +145,53 @@ export const PRODUTOS: Produto[] = [
     linkCheckout: 'https://pay.cakto.com.br/fkxh94h_1054119',
   },
   {
+    /*
+      Os três seguintes são os order bumps do checkout do FechaObra E ofertas
+      avulsas com página própria. Comprados no checkout chegam como
+      'orderbump', num evento com o principal; comprados avulsos chegam como
+      'main', num evento só deles. O casamento é o mesmo nos dois casos —
+      `product.id` — e é por isso que nada aqui distingue as duas vendas.
+    */
     produtoId: 'e7a1a53f-29ec-4e6e-a0b4-d7aea797c90c',
-    apelido: 'bump — Recuperação de Cliente',
+    apelido: 'Recuperação de Cliente',
     recursos: ['recuperacao'],
     oferta: 'gwjmcjt',
-    linkCheckout: '',
+    linkCheckout: 'https://pay.cakto.com.br/gwjmcjt_1061011',
   },
   {
     // Um bump, dois recursos: escrever os textos e montar o orçamento inteiro.
     produtoId: '8fe54020-3178-447d-bc4d-140174cdd494',
-    apelido: 'bump — Orçamento com IA',
+    apelido: 'Orçamento com IA',
     recursos: ['ia_textos', 'ia_orcamento'],
     oferta: 'iqrjnua',
-    linkCheckout: '',
+    linkCheckout: 'https://pay.cakto.com.br/iqrjnua_1061008',
   },
   {
     produtoId: '478dc215-b46e-46f0-80a2-efe86b77b1ab',
-    apelido: 'bump — Contrato e Recibo',
+    apelido: 'Contrato e Recibo',
     recursos: ['contratos'],
     oferta: '3ed238w',
-    linkCheckout: '',
+    linkCheckout: 'https://pay.cakto.com.br/3ed238w_1061007',
   },
   {
-    // Os três de baixo são upsells: produto próprio, evento próprio, e
+    // Os três de baixo são upsells: só avulsos, evento próprio, e sempre
     // `offer_type: 'main'` — porque são o principal DO CHECKOUT DELES.
     produtoId: '7b678169-aff6-41ff-9396-1d025b2334a1',
-    apelido: 'upsell — Áudio Vira Orçamento',
+    apelido: 'Áudio Vira Orçamento',
     recursos: ['audio_orcamento'],
     oferta: '3f2urd6',
     linkCheckout: 'https://pay.cakto.com.br/3f2urd6_1061021',
   },
   {
     produtoId: '945e918e-aaa8-4ea2-85fc-3d1458e54a2a',
-    apelido: 'upsell — Medição por Foto',
+    apelido: 'Medição por Foto',
     recursos: ['medicao_foto'],
     oferta: 'ndxpdrb',
     linkCheckout: 'https://pay.cakto.com.br/ndxpdrb_1061023',
   },
   {
     produtoId: 'bcf0f230-320d-49c5-aad7-59a1aded4e92',
-    apelido: 'upsell — Calculadora de Material',
+    apelido: 'Calculadora de Material',
     recursos: ['calculadora_material'],
     oferta: '348f3s9',
     linkCheckout: 'https://pay.cakto.com.br/348f3s9_1061026',
@@ -203,9 +222,10 @@ export function produtoDoRecurso(recurso: Recurso): Produto | null {
  * continua vindo só de `purchase_approved` no webhook.
  * ===========================================================================
  *
- * Devolve string vazia quando o produto não tem checkout próprio — hoje os
- * três order bumps. A tela trata isso como "em breve" em vez de oferecer um
- * botão que levaria a pessoa a pagar o vitalício de novo.
+ * Devolve string vazia só quando nenhum produto vende o recurso — hoje
+ * 'perfil_publico' e 'relatorio_mensal'. A tela trata isso como "em breve".
+ * Os sete produtos que existem têm checkout próprio, inclusive os três que
+ * também são order bumps do checkout do FechaObra.
  */
 export function checkoutDoRecurso(recurso: Recurso, email: string): string {
   const produto = produtoDoRecurso(recurso)

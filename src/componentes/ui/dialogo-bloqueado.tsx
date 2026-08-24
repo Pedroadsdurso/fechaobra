@@ -39,7 +39,14 @@ export function DialogoBloqueado({
   titulo: string
   /** Duas ou três linhas. Se precisar de mais, o recurso não está claro. */
   oQueFaz: string
-  /** Vazio enquanto o produto não existe na Cakto. */
+  /**
+   * O checkout do produto que vende este recurso, com o e-mail já preenchido.
+   *
+   * Vazio SÓ quando nenhum produto o vende ainda — 'perfil_publico' e
+   * 'relatorio_mensal'. Os recursos que hoje têm cadeado no editor (os dois de
+   * IA) vêm de um produto com página própria, então o caminho normal daqui é
+   * o botão de compra, não o aviso de "em breve".
+   */
   checkout: string
 }) {
   return (
@@ -66,6 +73,18 @@ export function DialogoBloqueado({
             </p>
           </>
         ) : (
+          /*
+            O galho que ninguém deveria ver.
+
+            Enquanto os três order bumps estavam sem link no catálogo, era ELE
+            que aparecia no cadeado da IA — dizendo "em breve" sobre um produto
+            que estava à venda o tempo todo. Não sumiu porque continua sendo a
+            saída certa para recurso sem produto: melhor um aviso honesto do
+            que um botão que não leva a lugar nenhum.
+
+            Se ele reaparecer no cadeado da IA, o defeito é no catálogo:
+            `linkCheckout` vazio em lib/cakto/produtos.ts.
+          */
           <p className="rounded-lg bg-fundo px-3 py-2.5 text-sm text-tinta-meta">
             Ainda não está à venda. Em breve.
           </p>
