@@ -56,6 +56,16 @@ export type Produto = {
   apelido: string
   /** Os recursos que uma compra aprovada deste produto libera. */
   recursos: Recurso[]
+  /**
+   * O checkout da Cakto deste produto.
+   *
+   * Mora aqui, junto do id, para produto novo ser UMA entrada só: o id casa o
+   * webhook na volta, o link leva a pessoa na ida. Separar os dois em lugares
+   * diferentes é como um deles fica desatualizado sem ninguém perceber — e o
+   * sintoma seria o pior possível: a tela manda para o checkout certo e o
+   * webhook não reconhece o que voltou, ou o contrário.
+   */
+  linkCheckout: string
 }
 
 /**
@@ -72,11 +82,47 @@ export const PRODUTOS: Produto[] = [
     produtoId: '',
     apelido: 'bump — pacote de produtividade',
     recursos: ['ia_textos', 'ia_orcamento', 'contratos', 'recuperacao'],
+    linkCheckout: '',
   },
-  { produtoId: '', apelido: 'upsell — IA por áudio', recursos: ['ia_audio'] },
-  { produtoId: '', apelido: 'upsell — IA de medição', recursos: ['ia_medicao'] },
-  { produtoId: '', apelido: 'upsell — calculadora', recursos: ['calculadora'] },
+  { produtoId: '', apelido: 'upsell — IA por áudio', recursos: ['ia_audio'], linkCheckout: '' },
+  { produtoId: '', apelido: 'upsell — IA de medição', recursos: ['ia_medicao'], linkCheckout: '' },
+  { produtoId: '', apelido: 'upsell — calculadora', recursos: ['calculadora'], linkCheckout: '' },
 ]
+
+/** Qual produto vende este recurso. Null se nenhum o vende ainda. */
+export function produtoDoRecurso(recurso: Recurso): Produto | null {
+  return PRODUTOS.find((p) => p.recursos.includes(recurso)) ?? null
+}
+
+/**
+ * O checkout do recurso, já com o e-mail da conta preenchido.
+ *
+ * ===========================================================================
+ * O APP MANDA O E-MAIL PARA O CHECKOUT, NÃO O CONTRÁRIO
+ * ===========================================================================
+ * Mesma decisão de `/acesso`, e aqui ela vale ainda mais: a pessoa já está
+ * logada há tempo, dentro do editor, no meio de um orçamento. O acesso é
+ * concedido por e-mail — comprar com um e ter conta noutro deixa a pessoa sem
+ * o recurso e sem como saber por quê.
+ *
+ * Aviso na tela não resolve isso: o próprio Pedro errou testando, sabendo
+ * exatamente como funciona. Preencher elimina o erro em vez de avisar sobre
+ * ele.
+ *
+ * Isto NÃO libera ninguém: parâmetro de URL não concede recurso. A liberação
+ * continua vindo só de `purchase_approved` no webhook.
+ * ===========================================================================
+ *
+ * Devolve string vazia quando o produto ainda não existe — a tela trata isso
+ * como "em breve" em vez de oferecer um botão que não leva a lugar nenhum.
+ */
+export function checkoutDoRecurso(recurso: Recurso, email: string): string {
+  const produto = produtoDoRecurso(recurso)
+  if (!produto?.linkCheckout) return ''
+  if (!email) return produto.linkCheckout
+  const parametros = new URLSearchParams({ email, confirmEmail: email })
+  return `${produto.linkCheckout}?${parametros}`
+}
 
 /**
  * O produto do pagamento, ou null.

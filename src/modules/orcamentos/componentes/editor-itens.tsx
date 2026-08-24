@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import { IconeIa } from '@/componentes/layout/icones'
+import { BotaoRecurso } from './botao-recurso'
 import { Botao } from '@/componentes/ui/botao'
 import { formatarMoeda } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -184,6 +184,7 @@ export function EditorItens({
   aoReordenar,
   aoAdicionar,
   aoDescrever,
+  iaOrcamento,
   aoAbrirBiblioteca,
   aoGuardarNaBiblioteca,
 }: {
@@ -192,8 +193,10 @@ export function EditorItens({
   aoRemover: (id: string) => void
   aoReordenar: (itens: ItemEditor[]) => void
   aoAdicionar: () => void
-  /** Nulo quando a conta não tem o recurso de IA: sem botão, sem promessa. */
+  /** Nulo só quando o recurso não existe nesta tela. Bloqueado ainda aparece. */
   aoDescrever: (() => void) | null
+  /** Se a conta tem ia_orcamento, e para onde mandar quem não tem. */
+  iaOrcamento: { liberado: boolean; checkout: string }
   aoAbrirBiblioteca: () => void
   aoGuardarNaBiblioteca: (item: ItemEditor) => void
 }) {
@@ -277,10 +280,14 @@ export function EditorItens({
         atalho de IA antes do campo que ele procurava.
       */}
       {aoDescrever && (
-        <Botao type="button" variante="ia" tamanho="grande" larguraTotal onClick={aoDescrever}>
-          <IconeIa className="size-5" />
-          Descrever em texto
-        </Botao>
+        <BotaoRecurso
+          liberado={iaOrcamento.liberado}
+          rotulo="Descrever em texto"
+          titulo="Descrever o serviço em texto"
+          oQueFaz="Você escreve como fala — “quebrar o piso do banheiro, assentar porcelanato uns 12m², trocar o vaso” — e recebe as linhas separadas, já com quantidade e unidade. O preço continua sendo seu: a IA não sugere valor nenhum."
+          checkout={iaOrcamento.checkout}
+          aoUsar={aoDescrever}
+        />
       )}
 
       {itens.length > 0 && (

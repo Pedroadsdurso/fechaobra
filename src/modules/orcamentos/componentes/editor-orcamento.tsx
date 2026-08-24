@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { Alerta } from '@/componentes/ui/alerta'
-import { IconeIa } from '@/componentes/layout/icones'
 import { Botao } from '@/componentes/ui/botao'
 import { Campo } from '@/componentes/ui/campo'
 import { Dialogo } from '@/componentes/ui/dialogo'
@@ -29,6 +28,7 @@ import { STATUS_ORCAMENTO, TIPOS_SERVICO, VALIDADE_PADRAO_DIAS } from '../consta
 import type { ItemBiblioteca, ItemEditor, Pacote, RascunhoOrcamento } from '../tipos'
 
 import { DialogoBiblioteca } from './dialogo-biblioteca'
+import { BotaoRecurso } from './botao-recurso'
 import { DialogoDescrever } from './dialogo-descrever'
 import { DialogoTextosIa } from './dialogo-textos-ia'
 import { DialogoEnvio } from './dialogo-envio'
@@ -112,6 +112,8 @@ export function EditorOrcamento({
   urlBase,
   temIaOrcamento,
   temIaTextos,
+  checkoutIaTextos,
+  checkoutIaOrcamento,
 }: {
   inicial: RascunhoOrcamento
   clientes: Cliente[]
@@ -121,6 +123,8 @@ export function EditorOrcamento({
   urlBase: string
   temIaOrcamento: boolean
   temIaTextos: boolean
+  checkoutIaTextos: string
+  checkoutIaOrcamento: string
 }) {
   const [rascunho, setRascunho] = useState(inicial)
   const [itensBiblioteca, setItensBiblioteca] = useState(biblioteca)
@@ -473,7 +477,8 @@ export function EditorOrcamento({
           aoReordenar={reordenarItens}
           aoAdicionar={adicionarItem}
           aoAbrirBiblioteca={() => setBibliotecaAberta(true)}
-          aoDescrever={temIaOrcamento ? () => setDescreverAberto(true) : null}
+          aoDescrever={() => setDescreverAberto(true)}
+          iaOrcamento={{ liberado: temIaOrcamento, checkout: checkoutIaOrcamento }}
           aoGuardarNaBiblioteca={guardarNaBiblioteca}
         />
 
@@ -512,18 +517,14 @@ export function EditorOrcamento({
             textos à mão encontra a oferta no caminho, e quem não quer só rola.
             Não substitui nada sozinho — a folha mostra o que vai trocar.
           */}
-          {temIaTextos && (
-            <Botao
-              type="button"
-              variante="ia"
-              tamanho="grande"
-              larguraTotal
-              onClick={() => setTextosIaAberto(true)}
-            >
-              <IconeIa className="size-5" />
-              Escrever com IA
-            </Botao>
-          )}
+          <BotaoRecurso
+            liberado={temIaTextos}
+            rotulo="Escrever com IA"
+            titulo="Escrever os textos com IA"
+            oQueFaz="Escopo, exclusões, garantia e condições escritos a partir dos itens que você já lançou. Você lê cada um e escolhe quais aproveita — nada substitui o que já está escrito sem você marcar. O prazo de garantia vem do padrão do seu tipo de serviço: a IA não inventa número."
+            checkout={checkoutIaTextos}
+            aoUsar={() => setTextosIaAberto(true)}
+          />
 
           <TextosDobrados
             textos={[
@@ -654,19 +655,25 @@ export function EditorOrcamento({
           )}
         </div>
 
-        <DialogoTextosIa
-          aberto={textosIaAberto}
-          aoFechar={() => setTextosIaAberto(false)}
-          rascunho={rascunho}
-          aoAplicar={(mudancas) => setRascunho((atual) => ({ ...atual, ...mudancas }))}
-        />
+        {/* As folhas de IA só existem para quem tem o recurso: sem recurso o
+            toque abre a explicação, e a ferramenta nunca chega a ser montada. */}
+        {temIaTextos && (
+          <DialogoTextosIa
+            aberto={textosIaAberto}
+            aoFechar={() => setTextosIaAberto(false)}
+            rascunho={rascunho}
+            aoAplicar={(mudancas) => setRascunho((atual) => ({ ...atual, ...mudancas }))}
+          />
+        )}
 
-        <DialogoDescrever
-          aberto={descreverAberto}
-          aoFechar={() => setDescreverAberto(false)}
-          tipoServico={rascunho.tipoServico}
-          aoAdicionar={adicionarItens}
-        />
+        {temIaOrcamento && (
+          <DialogoDescrever
+            aberto={descreverAberto}
+            aoFechar={() => setDescreverAberto(false)}
+            tipoServico={rascunho.tipoServico}
+            aoAdicionar={adicionarItens}
+          />
+        )}
 
         <DialogoBiblioteca
           aberto={bibliotecaAberta}
