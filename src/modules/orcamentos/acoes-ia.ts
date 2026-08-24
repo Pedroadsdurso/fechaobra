@@ -5,6 +5,8 @@ import { extrairItens, LIMITE_DESCRICAO, type ItemExtraido } from '@/modules/ia/
 import { gerarTextos, type TextosGerados } from '@/modules/ia/gerar-textos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
+import { carregarTextosPadrao } from './consultas'
+
 /**
  * As ações de IA do editor.
  *
@@ -95,11 +97,20 @@ export async function gerarTextosDoOrcamento(entrada: {
     return { ok: false, mensagem: 'Inclua ao menos um item antes de gerar os textos.' }
   }
 
+  /*
+    O prazo de garantia sai daqui, do seed do tipo de serviço — 5 anos em
+    impermeabilização, 3 em marcenaria, 2 em telhado. É o que dá ao modelo de
+    onde tirar número em vez de inventar, e é contra este texto que os prazos
+    do resultado são conferidos. Sem ele, nenhum período passa.
+  */
+  const padrao = await carregarTextosPadrao(entrada.tipoServico ?? '')
+
   const resultado = await gerarTextos({
     userId: user.id,
     tipoServico: entrada.tipoServico ?? '',
     titulo: entrada.titulo ?? '',
     itens,
+    garantiaPadrao: padrao?.garantia ?? '',
   })
 
   if (!resultado.ok) {

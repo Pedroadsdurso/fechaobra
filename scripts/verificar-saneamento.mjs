@@ -131,8 +131,8 @@ const textos = saneamento.payloadTextos({
 })
 const chavesT = Object.keys(textos).sort()
 conferir(
-  'payloadTextos devolve exatamente tipoServico, titulo e itens',
-  chavesT.length === 3 && chavesT.join(',') === 'itens,tipoServico,titulo',
+  'payloadTextos devolve exatamente tipoServico, titulo, itens e garantiaPadrao',
+  chavesT.length === 4 && chavesT.join(',') === 'garantiaPadrao,itens,tipoServico,titulo',
   `chaves: ${chavesT.join(', ')}`,
 )
 const serialT = JSON.stringify(textos)

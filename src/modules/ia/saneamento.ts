@@ -58,6 +58,15 @@ export type PayloadTextos = {
   tipoServico: string
   titulo: string
   itens: string[]
+  /**
+   * A garantia padrão do tipo de serviço, vinda do seed (migration 0002).
+   *
+   * Vai junto para o modelo ter DE ONDE tirar prazo em vez de inventar: o seed
+   * traz 5 anos em impermeabilização, 3 em marcenaria, 2 em telhado, 12 meses
+   * na maioria. É catálogo do produto, não dado de ninguém — cabe na lista de
+   * inclusão pelo mesmo critério que `tipoServico`.
+   */
+  garantiaPadrao: string
 }
 
 /**
@@ -75,6 +84,7 @@ export function payloadTextos(entrada: {
   tipoServico: string
   titulo: string
   itens: { descricao: string }[]
+  garantiaPadrao?: string
 }): PayloadTextos {
   return {
     tipoServico: entrada.tipoServico.trim().slice(0, 60),
@@ -83,6 +93,7 @@ export function payloadTextos(entrada: {
       .map((i) => i.descricao.trim().slice(0, 200))
       .filter(Boolean)
       .slice(0, 40),
+    garantiaPadrao: (entrada.garantiaPadrao ?? '').trim().slice(0, 1500),
   }
 }
 
@@ -93,7 +104,13 @@ export function payloadTextos(entrada: {
  * se aparecer chave fora desta lista. É a rede que pega o dia em que alguém
  * acrescentar um campo "só para ajudar o modelo".
  */
-export const CHAVES_PERMITIDAS = ['tipoServico', 'titulo', 'descricao', 'itens'] as const
+export const CHAVES_PERMITIDAS = [
+  'tipoServico',
+  'titulo',
+  'descricao',
+  'itens',
+  'garantiaPadrao',
+] as const
 
 export function chavesForaDaLista(payload: object): string[] {
   const permitidas = new Set<string>(CHAVES_PERMITIDAS)

@@ -267,6 +267,46 @@ valor** — não existe a casa onde a regra seria desobedecida, e o item chega n
 editor com `valorUnitario` vazio. Quem acrescentar `valorUnitario` ao schema
 "para adiantar" estará desfazendo a única garantia real que existe ali.
 
+### Mate a porta antes de subir servidor de teste
+
+**Processo antigo serve HTML apontando para chunks de um build que não existe
+mais, e o sintoma é idêntico a hidratação quebrada.** O `npm start` novo não
+consegue tomar a porta ocupada, morre calado, e quem responde é o servidor
+anterior — com os manifests do build velho em memória. Os chunks 404 e nada
+hidrata.
+
+Custou uma investigação inteira: o `verificar:hidratacao` acusou o editor morto
+logo depois da Etapa A e eu quase reportei regressão. Os erros que capturei no
+navegador eram dois `error` sem mensagem e sem arquivo — assinatura de recurso
+que não carregou, não de exceção de React.
+
+```
+lsof -ti:3100 | xargs kill 2>/dev/null; sleep 2
+npm run build && PORT=3100 npm start
+```
+
+### Prazo pode sair; prazo INVENTADO não
+
+Neutralizar todo número era conservador demais: "garantia de 5 anos" virava
+"garantia conforme combinado", que tira do texto a informação mais útil e
+obriga o prestador a escrever o prazo à mão toda vez — o recurso perde o motivo
+de existir.
+
+O problema nunca foi o número existir, é a IA inventar um. O seed (migration
+0002) já traz o prazo certo por tipo de serviço — 5 anos em impermeabilização,
+3 em marcenaria, 2 em telhado, 12 meses na maioria. Esse texto viaja no payload
+como `garantiaPadrao`, e todo período no texto gerado é conferido contra ele:
+**o que está na referência passa; o que o modelo inventou vira "conforme
+combinado"**.
+
+Valor em reais e percentual continuam sempre neutralizados — não há referência
+de preço nenhuma no payload, então qualquer número desses é invenção por
+definição.
+
+A substituição engole a preposição antes e o qualificador depois, senão sobra
+frase capenga ("damos garantia DE conforme combinado", "pronta em conforme
+combinado ÚTEIS"). O texto vai para um documento que o cliente lê.
+
 ### O check de hidratação é gate de push, não lembrete
 
 Mudança em editor, auth ou sessão **não sobe sem prova de que o painel ainda
