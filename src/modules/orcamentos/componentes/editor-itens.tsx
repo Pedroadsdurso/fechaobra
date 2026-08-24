@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+import { IconeIa } from '@/componentes/layout/icones'
 import { Botao } from '@/componentes/ui/botao'
 import { formatarMoeda } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -276,13 +277,8 @@ export function EditorItens({
         atalho de IA antes do campo que ele procurava.
       */}
       {aoDescrever && (
-        <Botao
-          type="button"
-          variante="secundario"
-          tamanho="grande"
-          larguraTotal
-          onClick={aoDescrever}
-        >
+        <Botao type="button" variante="ia" tamanho="grande" larguraTotal onClick={aoDescrever}>
+          <IconeIa className="size-5" />
           Descrever em texto
         </Botao>
       )}

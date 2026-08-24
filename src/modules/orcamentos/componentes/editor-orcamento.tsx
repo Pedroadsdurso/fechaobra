@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { Alerta } from '@/componentes/ui/alerta'
+import { IconeIa } from '@/componentes/layout/icones'
 import { Botao } from '@/componentes/ui/botao'
 import { Campo } from '@/componentes/ui/campo'
 import { Dialogo } from '@/componentes/ui/dialogo'
@@ -514,11 +515,12 @@ export function EditorOrcamento({
           {temIaTextos && (
             <Botao
               type="button"
-              variante="secundario"
+              variante="ia"
               tamanho="grande"
               larguraTotal
               onClick={() => setTextosIaAberto(true)}
             >
+              <IconeIa className="size-5" />
               Escrever com IA
             </Botao>
           )}

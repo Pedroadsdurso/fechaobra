@@ -67,3 +67,26 @@ export function IconeSair(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+/**
+ * Os três brilhos, convenção que o público já associa a IA.
+ *
+ * Estrelas de quatro pontas com lados côncavos, em tamanhos diferentes, no
+ * mesmo traço de 1.75 do resto do conjunto — não 1.5, para o ícone pertencer à
+ * família: ao lado de `IconePainel` na barra inferior, meio ponto de diferença
+ * aparece.
+ *
+ * Sem preenchimento e sem gradiente. O destaque do botão de IA vem de borda e
+ * peso, não de cor nova: a paleta é neutra mais vermelho, laranja e verde, e
+ * laranja é do CTA de envio. Inventar um roxo "de IA" seria exatamente o
+ * enfeite de que este público desconfia.
+ */
+export function IconeIa(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9.5 4.5C9.5 8.46 11.54 10.5 15.5 10.5C11.54 10.5 9.5 12.54 9.5 16.5C9.5 12.54 7.46 10.5 3.5 10.5C7.46 10.5 9.5 8.46 9.5 4.5Z" />
+      <path d="M18 2.5C18 4.48 19.02 5.5 21 5.5C19.02 5.5 18 6.52 18 8.5C18 6.52 16.98 5.5 15 5.5C16.98 5.5 18 4.48 18 2.5Z" />
+      <path d="M17.5 14.6C17.5 16.18 18.32 17 19.9 17C18.32 17 17.5 17.82 17.5 19.4C17.5 17.82 16.68 17 15.1 17C16.68 17 17.5 16.18 17.5 14.6Z" />
+    </svg>
+  )
+}

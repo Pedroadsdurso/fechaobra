@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react'
 
 import { cn } from '@/lib/utils'
 
-type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo'
+type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo' | 'ia'
 type Tamanho = 'medio' | 'grande'
 
 const VARIANTES: Record<Variante, string> = {
@@ -10,6 +10,20 @@ const VARIANTES: Record<Variante, string> = {
   secundario: 'bg-superficie text-tinta border border-borda hover:bg-fundo active:bg-fundo',
   fantasma: 'bg-transparent text-tinta-suave hover:bg-fundo hover:text-tinta',
   perigo: 'bg-transparent text-perigo border border-perigo/30 hover:bg-perigo/5',
+  /*
+    Recurso de IA. Difere do `secundario` só pela borda e pelo peso — e é de
+    propósito.
+
+    Não há cor "de IA" nesta paleta: ela é neutra mais vermelho (perigo),
+    laranja (atenção, e o laranja é do CTA de envio) e verde (sucesso).
+    Inventar um roxo para o recurso quebraria a identidade e leria como
+    enfeite, que é do que este público desconfia.
+
+    Então a diferença é estrutural: borda em `borda-controle` (#7d8894, contra
+    #e3e6ea do secundário) e texto semibold. Separa do botão manual ao lado sem
+    chegar perto do peso do primário, que é do CTA de enviar.
+  */
+  ia: 'bg-superficie text-tinta font-semibold border border-borda-controle hover:bg-fundo active:bg-fundo',
 }
 
 const TAMANHOS: Record<Tamanho, string> = {
@@ -65,9 +79,6 @@ export function Botao({
   ...props
 }: Props) {
   return (
-    <button
-      className={classesBotao({ variante, tamanho, larguraTotal, className })}
-      {...props}
-    />
+    <button className={classesBotao({ variante, tamanho, larguraTotal, className })} {...props} />
   )
 }
