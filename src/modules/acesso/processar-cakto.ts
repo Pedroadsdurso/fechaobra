@@ -41,6 +41,8 @@ type Admin = SupabaseClient<Database>
 /** Os únicos três que mexem em acesso. */
 const TRATADOS = new Set(['purchase_approved', 'refund', 'chargeback'])
 
+import { descreverProduto, produtoDoPagamento } from './produtos'
+
 export type Resultado = {
   processado: boolean
   /** Fica no log, para eu entender depois o que aconteceu sem reler o payload. */
@@ -48,7 +50,12 @@ export type Resultado = {
   pedidoId: string | null
 }
 
-type Pedido = { id: string; email: string }
+type Pedido = {
+  id: string
+  email: string
+  /** `data[0].product.id`. Nulo quando o payload não traz produto. */
+  produtoId: string | null
+}
 
 /**
  * Tira do payload só o que a liberação precisa, e diz quando não dá.
@@ -69,8 +76,21 @@ function lerPedido(payload: unknown): Pedido | null {
   const cliente = pedido.customer as Record<string, unknown> | undefined
   const email = typeof cliente?.email === 'string' ? cliente.email.trim().toLowerCase() : ''
 
+  /*
+    Medido em evento real: `data[0].product` é
+    `{ id: '6ba610fb-…', name, type, short_id }` e `data[0].offer` é
+    `{ id: 'fkxh94h', price }`. Casamos pelo UUID do PRODUTO, não pela oferta:
+    um produto pode ter várias ofertas (promoção, teste de preço) e casar por
+    oferta quebraria na primeira delas.
+
+    Produto ausente não invalida o pedido — o vitalício de R$ 47 continua
+    sendo liberado normalmente. Só não concede recurso nenhum.
+  */
+  const produto = pedido.product as Record<string, unknown> | undefined
+  const produtoId = typeof produto?.id === 'string' ? produto.id.trim() : ''
+
   if (!id || !email) return null
-  return { id, email }
+  return { id, email, produtoId: produtoId || null }
 }
 
 export function eventoTratado(tipo: string | null) {
@@ -221,11 +241,62 @@ async function liberar(admin: Admin, pedido: Pedido): Promise<Resultado> {
 
   if (error) throw new Error(`não consegui liberar ${pedido.email}: ${error.message}`)
 
+  const recursos = await liberarRecursos(admin, pedido, userId)
+
   return {
     processado: true,
-    nota: userId ? 'liberado e vinculado à conta existente' : 'liberado, aguardando o cadastro',
+    nota:
+      (userId ? 'liberado e vinculado à conta existente' : 'liberado, aguardando o cadastro') +
+      ` · ${recursos}`,
     pedidoId: pedido.id,
   }
+}
+
+/**
+ * Os recursos que este produto concede, gravados com o pedido que os pagou.
+ *
+ * ===========================================================================
+ * O pedido_id NA LINHA É O QUE TORNA A REVOGAÇÃO CIRÚRGICA
+ * ===========================================================================
+ * Cada recurso nasce carimbado com o pedido que o pagou. Quando o reembolso
+ * chegar, ele revoga `where pedido_id = <aquele>` — e por construção não
+ * alcança recurso de outro produto nem o vitalício, que mora noutra tabela.
+ *
+ * Sem o carimbo, revogar exigiria olhar o catálogo e deduzir quais recursos
+ * "provavelmente" vieram daquela compra. Dedução em revogação é como se tira
+ * acesso de quem pagou.
+ * ===========================================================================
+ *
+ * Não lança: recurso que falha não pode derrubar o vitalício que já foi
+ * gravado. Fica na nota do evento, que é o lugar de onde eu conserto à mão.
+ */
+async function liberarRecursos(admin: Admin, pedido: Pedido, userId: string | null) {
+  const produto = produtoDoPagamento(pedido.produtoId)
+  if (!produto) return `sem recursos — ${descreverProduto(pedido.produtoId)}`
+
+  const agora = new Date().toISOString()
+  const linhas = produto.recursos.map((recurso) => ({
+    email: pedido.email,
+    user_id: userId,
+    recurso,
+    status: 'ativa',
+    pedido_id: pedido.id,
+    liberada_em: agora,
+    revogada_em: null,
+    motivo_revogacao: null,
+  }))
+
+  /*
+    Todas as chaves em todas as linhas, e nenhuma omitida: no insert em lote do
+    PostgREST, chave ausente numa linha vira NULL explícito e atropela o
+    DEFAULT da coluna. Ver a regra no README.
+  */
+  const { error } = await admin
+    .from('recursos_liberados')
+    .upsert(linhas, { onConflict: 'email,recurso' })
+
+  if (error) return `FALHOU ao liberar ${produto.apelido}: ${error.message}`
+  return `recursos liberados: ${produto.recursos.join(', ')} (${produto.apelido})`
 }
 
 async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resultado> {
@@ -323,11 +394,51 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
 
   if (error) throw new Error(`não consegui revogar ${pedido.email}: ${error.message}`)
 
+  const recursos = await revogarRecursos(admin, pedido, tipo)
+
   return {
     processado: true,
-    nota: `revogado por ${tipo} (casou por ${casouPor})`,
+    nota: `revogado por ${tipo} (casou por ${casouPor}) · ${recursos}`,
     pedidoId: pedido.id,
   }
+}
+
+/**
+ * Revoga SÓ os recursos daquele pedido.
+ *
+ * ===========================================================================
+ * O FILTRO É O pedido_id, E ISSO NÃO É DETALHE
+ * ===========================================================================
+ * Quem comprou o bump e depois um upsell tem recursos de dois pedidos. Pedir
+ * reembolso do upsell não pode tirar o bump — e não tira, porque o `.eq` é
+ * pelo pedido, não pelo e-mail nem pelo catálogo.
+ *
+ * O vitalício de R$ 47 está fora por construção: mora em `liberacoes`, outra
+ * tabela, e é revogado só quando o reembolso é do pedido DELE.
+ *
+ * Repare no que NÃO acontece aqui: nada é apagado. O status vira 'revogada' e
+ * a linha fica. O que o recurso já produziu — textos no orçamento, contrato
+ * gerado — continua existindo e válido. Revogação tira a capacidade de gerar
+ * NOVOS, nunca o que já foi entregue. Quem for "limpar" isto depois: reembolso
+ * devolve o dinheiro do serviço, não desfaz o trabalho que o prestador já
+ * mandou para o cliente dele.
+ * ===========================================================================
+ */
+async function revogarRecursos(admin: Admin, pedido: Pedido, tipo: string) {
+  const { data, error } = await admin
+    .from('recursos_liberados')
+    .update({
+      status: 'revogada',
+      revogada_em: new Date().toISOString(),
+      motivo_revogacao: tipo,
+    })
+    .eq('pedido_id', pedido.id)
+    .eq('status', 'ativa')
+    .select('recurso')
+
+  if (error) return `FALHOU ao revogar recursos: ${error.message}`
+  if (!data?.length) return 'nenhum recurso vinculado a este pedido'
+  return `recursos revogados: ${data.map((r) => r.recurso).join(', ')}`
 }
 
 /** Procura a conta pelo e-mail. Nulo quando ela ainda não existe. */

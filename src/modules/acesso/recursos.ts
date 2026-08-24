@@ -35,7 +35,18 @@ import { exigirAcesso } from './guarda'
  * mudar bastante.
  */
 export type Recurso =
-  'ia_textos' | 'ia_orcamento' | 'contratos' | 'perfil_publico' | 'relatorio_mensal'
+  // Do order bump: um produto, quatro recursos.
+  | 'ia_textos'
+  | 'ia_orcamento'
+  | 'contratos'
+  | 'recuperacao'
+  // Upsells, um produto cada.
+  | 'ia_audio'
+  | 'ia_medicao'
+  | 'calculadora'
+  // Previstos, ainda sem produto na Cakto.
+  | 'perfil_publico'
+  | 'relatorio_mensal'
 
 export class SemRecurso extends Error {
   constructor(public recurso: Recurso) {
