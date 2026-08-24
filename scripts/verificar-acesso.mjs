@@ -335,10 +335,29 @@ async function principal() {
       depoisSem === antesSem,
       `orçamentos ${antesSem} -> ${depoisSem}`,
     )
+    /*
+      A GUARDA MANDA PARA /acesso, E ISSO É UMA AFIRMAÇÃO SOBRE O MECANISMO.
+
+      Isto já foi `status >= 400`, quando `exigirAcesso` lançava e virava 500.
+      Trocar por `status === 200` sozinho seria um teste pior que nenhum: 200 é
+      exatamente o que uma ação SEM guarda nenhuma devolveria.
+
+      O que prova a guarda é o `x-action-redirect` — o cabeçalho com que o Next
+      diz ao roteador do cliente para navegar. Ele só existe porque o
+      `redirect('/acesso')` rodou, e ele nomeia o destino. Junto com "não criou
+      orçamento", logo acima, não sobra caminho por onde a ação possa ter
+      seguido em frente.
+    */
+    const destinoAcao = rAtaque.headers.get('x-action-redirect') ?? ''
     conferir(
-      '  a chamada falhou (algo lançou)',
-      rAtaque.status >= 400,
-      `http=${rAtaque.status} corpo="${corpo.slice(0, 40).replace(/\n/g, ' ')}"`,
+      '  a resposta manda a pessoa para /acesso',
+      rAtaque.status === 200 && destinoAcao.startsWith('/acesso'),
+      `http=${rAtaque.status} x-action-redirect="${destinoAcao || '(ausente)'}" — recusa navegável, não 500`,
+    )
+    conferir(
+      '  e não devolve corpo de erro',
+      !corpo.includes('"digest"') && !corpo.toLowerCase().includes('sem uma compra ativa'),
+      'nenhuma exceção subiu à fronteira',
     )
 
     /*
@@ -361,10 +380,21 @@ async function principal() {
     })
     const rDepois = await chamar(contas.bloqueada.cookie)
     const criouDepois = await contar(contas.bloqueada.userId)
+    /*
+      O discriminante NÃO é "tem x-action-redirect", e a primeira versão desta
+      prova errou nisso: o caminho de SUCESSO também redireciona — criar um
+      orçamento leva a pessoa para ele. Os dois casos respondem 200 com
+      cabeçalho de redirecionamento; o que muda é PARA ONDE.
+
+      Então afirma-se o par: criou o orçamento E o destino não é /acesso.
+      Sozinho, o primeiro deixaria passar uma ação que criasse e mandasse para
+      a tela de compra; o segundo, uma que não fizesse nada calada.
+    */
+    const destinoDepois = rDepois.headers.get('x-action-redirect') ?? ''
     conferir(
       '  PROVA: a MESMA chamada passa depois de liberar a MESMA conta',
-      criouDepois > antesSem && rDepois.status < 400,
-      `orçamentos ${antesSem} -> ${criouDepois}, http=${rDepois.status} — só a liberação mudou`,
+      criouDepois > antesSem && !destinoDepois.startsWith('/acesso'),
+      `orçamentos ${antesSem} -> ${criouDepois}, vai para "${destinoDepois || '(nenhum)'}" e não /acesso — só a liberação mudou`,
     )
     // =====================================================================
     console.log('\n  === MÓDULO DE IA: SÓ O VITALÍCIO NÃO ABRE A IA ===\n')

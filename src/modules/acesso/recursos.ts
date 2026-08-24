@@ -151,10 +151,11 @@ export async function temRecurso(recurso: Recurso) {
  * Esquecer o `comRecurso` não compila contra o tipo de retorno da ação, que
  * inclui `RespostaSemRecurso`.
  *
- * A ORDEM IMPORTA. `exigirAcesso()` vem primeiro, e continua LANÇANDO: quem
- * não comprou o FechaObra tem que receber `SemAcesso` — que a tela transforma
- * na página de compra do produto — e não a oferta de um módulo solto, que
- * mandaria a pessoa comprar o acessório sem ter o principal.
+ * A ORDEM IMPORTA, e as duas guardas terminam diferente de propósito:
+ * `exigirAcesso()` vem primeiro e REDIRECIONA para /acesso, porque quem não
+ * comprou o FechaObra não tem tela nenhuma para ficar. Quem comprou e só não
+ * tem o módulo recebe a recusa aqui e continua no orçamento dela. Ver o bloco
+ * em guarda.ts.
  * ===========================================================================
  */
 export async function comRecurso<T>(
