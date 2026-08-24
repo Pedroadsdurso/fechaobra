@@ -2,6 +2,7 @@
 
 import { exigirRecurso } from '@/modules/acesso/recursos'
 import { extrairItens, LIMITE_DESCRICAO, type ItemExtraido } from '@/modules/ia/extrair-itens'
+import { gerarTextos, type TextosGerados } from '@/modules/ia/gerar-textos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
 /**
@@ -58,4 +59,52 @@ export async function extrairItensDoTexto(entrada: {
   }
 
   return { ok: true, itens: resultado.dados, restantes: resultado.saldo.restantes - 1 }
+}
+
+export type ResultadoTextos =
+  | { ok: true; textos: TextosGerados; restantes: number }
+  | { ok: false; mensagem: string; espereMs?: number }
+
+/**
+ * Os quatro textos que sustentam o preço, a partir do que o orçamento já tem.
+ *
+ * Sai daqui: tipo de serviço, título e a DESCRIÇÃO de cada item — três campos,
+ * montados por inclusão em `payloadTextos`. Quantidade, unidade e valor
+ * unitário ficam: não melhoram um texto de escopo, e valor unitário é a
+ * informação comercial mais sensível que o prestador tem.
+ *
+ * Precisa de itens. Escopo escrito sem saber o que foi contratado sai genérico
+ * — e texto genérico num orçamento é pior que campo vazio, porque parece que
+ * alguém escreveu.
+ */
+export async function gerarTextosDoOrcamento(entrada: {
+  tipoServico: string
+  titulo: string
+  itens: { descricao: string }[]
+}): Promise<ResultadoTextos> {
+  await exigirRecurso('ia_textos')
+
+  const supabase = await criarClienteServidor()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensagem: 'Sessão expirada. Entre de novo.' }
+
+  const itens = (entrada.itens ?? []).filter((i) => i?.descricao?.trim())
+  if (itens.length === 0) {
+    return { ok: false, mensagem: 'Inclua ao menos um item antes de gerar os textos.' }
+  }
+
+  const resultado = await gerarTextos({
+    userId: user.id,
+    tipoServico: entrada.tipoServico ?? '',
+    titulo: entrada.titulo ?? '',
+    itens,
+  })
+
+  if (!resultado.ok) {
+    return { ok: false, mensagem: resultado.mensagem, espereMs: resultado.espereMs }
+  }
+
+  return { ok: true, textos: resultado.dados, restantes: resultado.saldo.restantes - 1 }
 }

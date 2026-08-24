@@ -53,6 +53,39 @@ export function payloadExtracao(entrada: {
 /** O teto do texto livre. Também cobrado na tela e na Server Action. */
 export const LIMITE_DESCRICAO = 1200
 
+/** O payload da geração de textos. Três campos, e são estes três. */
+export type PayloadTextos = {
+  tipoServico: string
+  titulo: string
+  itens: string[]
+}
+
+/**
+ * Etapa A: escopo, exclusões, garantia e condições a partir do que já existe
+ * no orçamento.
+ *
+ * SÓ A DESCRIÇÃO DE CADA ITEM SAI. Quantidade, unidade e valor unitário ficam,
+ * e não é excesso de zelo: quantidade e unidade não melhoram um texto de
+ * escopo, e valor unitário é a informação comercial mais sensível que o
+ * prestador tem. A lista de `itens` é montada por `map` para uma string, não
+ * por `map` para um objeto reduzido — objeto reduzido é filtro por exclusão
+ * com outro nome, e volta a vazar no dia em que ItemEditor ganhar campo.
+ */
+export function payloadTextos(entrada: {
+  tipoServico: string
+  titulo: string
+  itens: { descricao: string }[]
+}): PayloadTextos {
+  return {
+    tipoServico: entrada.tipoServico.trim().slice(0, 60),
+    titulo: entrada.titulo.trim().slice(0, 120),
+    itens: entrada.itens
+      .map((i) => i.descricao.trim().slice(0, 200))
+      .filter(Boolean)
+      .slice(0, 40),
+  }
+}
+
 /**
  * As chaves que podem existir num payload de IA, em qualquer etapa.
  *

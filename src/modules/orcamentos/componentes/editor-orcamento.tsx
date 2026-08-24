@@ -29,6 +29,7 @@ import type { ItemBiblioteca, ItemEditor, Pacote, RascunhoOrcamento } from '../t
 
 import { DialogoBiblioteca } from './dialogo-biblioteca'
 import { DialogoDescrever } from './dialogo-descrever'
+import { DialogoTextosIa } from './dialogo-textos-ia'
 import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
@@ -109,6 +110,7 @@ export function EditorOrcamento({
   empresa,
   urlBase,
   temIaOrcamento,
+  temIaTextos,
 }: {
   inicial: RascunhoOrcamento
   clientes: Cliente[]
@@ -117,11 +119,13 @@ export function EditorOrcamento({
   /** URL pública da aplicação, resolvida no servidor. */
   urlBase: string
   temIaOrcamento: boolean
+  temIaTextos: boolean
 }) {
   const [rascunho, setRascunho] = useState(inicial)
   const [itensBiblioteca, setItensBiblioteca] = useState(biblioteca)
   const [bibliotecaAberta, setBibliotecaAberta] = useState(false)
   const [descreverAberto, setDescreverAberto] = useState(false)
+  const [textosIaAberto, setTextosIaAberto] = useState(false)
   const [salvamento, setSalvamento] = useState<Salvamento>('parado')
   const [aviso, setAviso] = useState('')
   const [substituirTextos, setSubstituirTextos] = useState(false)
@@ -502,6 +506,23 @@ export function EditorOrcamento({
             nota="Vieram do modelo do tipo de serviço. Toque para ajustar — o documento usa o que estiver aqui."
           />
 
+          {/*
+            Depois do cabeçalho e ANTES das dobras: quem vem preencher os
+            textos à mão encontra a oferta no caminho, e quem não quer só rola.
+            Não substitui nada sozinho — a folha mostra o que vai trocar.
+          */}
+          {temIaTextos && (
+            <Botao
+              type="button"
+              variante="secundario"
+              tamanho="grande"
+              larguraTotal
+              onClick={() => setTextosIaAberto(true)}
+            >
+              Escrever com IA
+            </Botao>
+          )}
+
           <TextosDobrados
             textos={[
               {
@@ -630,6 +651,13 @@ export function EditorOrcamento({
             </div>
           )}
         </div>
+
+        <DialogoTextosIa
+          aberto={textosIaAberto}
+          aoFechar={() => setTextosIaAberto(false)}
+          rascunho={rascunho}
+          aoAplicar={(mudancas) => setRascunho((atual) => ({ ...atual, ...mudancas }))}
+        />
 
         <DialogoDescrever
           aberto={descreverAberto}

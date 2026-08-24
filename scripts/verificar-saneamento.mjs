@@ -101,6 +101,59 @@ const fora = saneamento.chavesForaDaLista(payload)
 conferir('nenhuma chave fora da lista permitida', fora.length === 0, fora.join(', ') || 'nenhuma')
 
 // ---------------------------------------------------------------------------
+// 1b. O payload da Etapa A: só a DESCRIÇÃO de cada item.
+// ---------------------------------------------------------------------------
+/*
+  O item completo do editor carrega valor unitário — a informação comercial
+  mais sensível que o prestador tem. Se um dia payloadTextos passar a mandar o
+  objeto inteiro "porque ajuda o modelo", é aqui que se descobre.
+*/
+const textos = saneamento.payloadTextos({
+  ...SEGREDOS,
+  tipoServico: 'pintura',
+  titulo: 'Pintura do apartamento',
+  itens: [
+    {
+      descricao: 'Pintura de parede interna',
+      quantidade: '40',
+      unidade: 'm²',
+      valorUnitario: '38,50',
+      tipo: 'mao_de_obra',
+    },
+    {
+      descricao: 'Massa corrida',
+      quantidade: '2',
+      unidade: 'sc',
+      valorUnitario: '129,90',
+      tipo: 'material',
+    },
+  ],
+})
+const chavesT = Object.keys(textos).sort()
+conferir(
+  'payloadTextos devolve exatamente tipoServico, titulo e itens',
+  chavesT.length === 3 && chavesT.join(',') === 'itens,tipoServico,titulo',
+  `chaves: ${chavesT.join(', ')}`,
+)
+const serialT = JSON.stringify(textos)
+conferir(
+  '  os itens saem como texto puro, sem quantidade nem valor',
+  textos.itens.every((i) => typeof i === 'string') && !/38,50|129,90|"40"|"2"/.test(serialT),
+  serialT.slice(0, 120),
+)
+const vazadosT = Object.entries(SEGREDOS).filter(([, v]) => serialT.includes(v))
+conferir(
+  '  nenhum dado sensível sobreviveu',
+  vazadosT.length === 0,
+  vazadosT.length ? `VAZOU: ${vazadosT.map(([k]) => k).join(', ')}` : 'limpo',
+)
+conferir(
+  '  nenhuma chave fora da lista permitida',
+  saneamento.chavesForaDaLista(textos).length === 0,
+  saneamento.chavesForaDaLista(textos).join(', ') || 'nenhuma',
+)
+
+// ---------------------------------------------------------------------------
 // 2. Existe uma porta só para o Gemini.
 // ---------------------------------------------------------------------------
 /*

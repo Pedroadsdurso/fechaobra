@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'Editar orçamento' }
 export default async function PaginaOrcamento({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [carregado, clientes, biblioteca, marca, temIaOrcamento] = await Promise.all([
+  const [carregado, clientes, biblioteca, marca, temIaOrcamento, temIaTextos] = await Promise.all([
     carregarOrcamento(id),
     listarClientes(),
     listarItensBiblioteca(),
@@ -21,6 +21,7 @@ export default async function PaginaOrcamento({ params }: { params: Promise<{ id
     // Decide se o botão APARECE. A tranca de verdade é o exigirRecurso na
     // Server Action — esconder botão é conveniência de interface, não guarda.
     temRecurso('ia_orcamento'),
+    temRecurso('ia_textos'),
   ])
 
   // O RLS já devolve vazio para orçamento de outro usuário; aqui isso vira 404.
@@ -41,6 +42,7 @@ export default async function PaginaOrcamento({ params }: { params: Promise<{ id
         // não existem. Ver lib/url-base.ts.
         urlBase={urlBase()}
         temIaOrcamento={temIaOrcamento}
+        temIaTextos={temIaTextos}
         // A URL do logo já vem assinada daqui: o bucket é privado e o preview
         // roda no navegador, que não tem como assinar nada sozinho.
         empresa={{
