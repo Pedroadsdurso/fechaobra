@@ -2,6 +2,7 @@ import 'server-only'
 
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import type { Cliente } from '@/modules/clientes/tipos'
+import { MOTIVOS_DUVIDA, motivoValido, type MotivoDuvida } from '@/modules/publico/motivos'
 
 import { pacotesPadrao } from './calculos'
 import { NICHO_PADRAO, TIPOS_SERVICO, VALIDADE_PADRAO_DIAS } from './constantes'
@@ -189,6 +190,14 @@ export type OrcamentoNaLista = {
    * Nulo quando bate ou quando não houve aceite.
    */
   enderecoDivergente: string | null
+  /**
+   * A última dúvida que o cliente registrou pelo link público. Nulo se não
+   * houve nenhuma.
+   *
+   * Não muda o status do orçamento de propósito — dúvida não é recusa. O
+   * orçamento continua na fila de trabalho, agora com o motivo à vista.
+   */
+  duvida: { motivo: MotivoDuvida; rotulo: string; texto: string | null; em: string } | null
 }
 
 /**
@@ -222,11 +231,18 @@ export async function listarOrcamentos(): Promise<OrcamentoNaLista[]> {
       .from('orcamento_itens')
       .select('orcamento_id, quantidade, valor_unitario')
       .in('orcamento_id', ids),
+    /*
+      Uma consulta para os dois tipos de evento, não duas. Ordenada ascendente,
+      que serve aos dois com leituras opostas: da visualização interessa a
+      PRIMEIRA (o primeiro que entra no mapa), da dúvida interessa a ÚLTIMA (o
+      último a sobrescrever). O índice (orcamento_id, criado_em desc) de 0001
+      atende sem nada novo.
+    */
     supabase
       .from('eventos_orcamento')
-      .select('orcamento_id, tipo, criado_em')
+      .select('orcamento_id, tipo, criado_em, motivo, motivo_texto')
       .in('orcamento_id', ids)
-      .eq('tipo', 'visualizado')
+      .in('tipo', ['visualizado', 'duvida'])
       .order('criado_em', { ascending: true }),
   ])
 
@@ -241,10 +257,26 @@ export async function listarOrcamentos(): Promise<OrcamentoNaLista[]> {
   // Ordenado por criado_em ascendente, então o primeiro que entra no mapa é a
   // PRIMEIRA visualização — que é a que interessa para contar o tempo parado.
   const primeiraVisualizacao = new Map<string, string>()
+  const ultimaDuvida = new Map<string, OrcamentoNaLista['duvida']>()
+
   for (const evento of eventos ?? []) {
-    if (!primeiraVisualizacao.has(evento.orcamento_id)) {
-      primeiraVisualizacao.set(evento.orcamento_id, evento.criado_em)
+    if (evento.tipo === 'visualizado') {
+      if (!primeiraVisualizacao.has(evento.orcamento_id)) {
+        primeiraVisualizacao.set(evento.orcamento_id, evento.criado_em)
+      }
+      continue
     }
+
+    // Sem "if (!has)": aqui a intenção é o contrário — sobrescrever até sobrar
+    // a mais recente. Cliente que volta com outra pergunta substitui a anterior
+    // no cartão, e o histórico inteiro continua na tabela.
+    if (!motivoValido(evento.motivo)) continue
+    ultimaDuvida.set(evento.orcamento_id, {
+      motivo: evento.motivo,
+      rotulo: MOTIVOS_DUVIDA.find((m) => m.valor === evento.motivo)?.rotulo ?? '',
+      texto: evento.motivo_texto,
+      em: evento.criado_em,
+    })
   }
 
   return orcamentos.map((o) => {
@@ -280,6 +312,7 @@ export async function listarOrcamentos(): Promise<OrcamentoNaLista[]> {
       quantidadeItens: agregado.quantidade,
       vazio: !cliente && agregado.quantidade === 0,
       enderecoDivergente,
+      duvida: ultimaDuvida.get(o.id) ?? null,
     }
   })
 }

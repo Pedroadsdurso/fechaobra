@@ -3,9 +3,10 @@
 import { useState } from 'react'
 
 import { rotuloDocumento, situacaoDocumento } from '@/lib/documento-br'
+import { LIMITE_MOTIVO_TEXTO, MOTIVOS_DUVIDA, type MotivoDuvida } from '@/modules/publico/motivos'
 import { formatarCnpjCpf, formatarMoeda } from '@/lib/utils'
 
-type Etapa = 'convite' | 'dados' | 'pronto'
+type Etapa = 'convite' | 'dados' | 'pronto' | 'duvida'
 
 /**
  * O aceite.
@@ -52,6 +53,41 @@ export function Aceite({
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [confirmadoEm, setConfirmadoEm] = useState(aceitoEm)
+  const [motivoTexto, setMotivoTexto] = useState('')
+  const [escrevendo, setEscrevendo] = useState(false)
+  const [duvidaEnviada, setDuvidaEnviada] = useState(false)
+
+  /**
+   * Registra o motivo e NÃO espera.
+   *
+   * ===========================================================================
+   * A AUSÊNCIA DE await E DE TRATAMENTO DE ERRO AQUI É DELIBERADA
+   * ===========================================================================
+   * Quem ler isto vai querer "consertar" com await e uma mensagem de falha. Não
+   * é esquecimento — é o que faz o fluxo funcionar no iPhone.
+   *
+   * O botão que chama esta função é uma ÂNCORA de verdade, e a navegação para o
+   * WhatsApp acontece no próprio toque. Um await antes disso tiraria a abertura
+   * de dentro do gesto do usuário, e o Safari do iPhone bloqueia. O cliente
+   * responderia a pergunta e não sairia do lugar — perdendo exatamente a
+   * conversa que este fluxo existe para preservar.
+   *
+   * `keepalive` é o que mantém o POST vivo quando a página é suspensa ao trocar
+   * de app. E se ele falhar mesmo assim, tudo bem: o prestador perde um dado, o
+   * que é infinitamente melhor que perder a conversa.
+   * ===========================================================================
+   */
+  function registrarDuvida(motivo: MotivoDuvida, texto = '') {
+    fetch(`/api/p/${token}/duvida`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motivo, texto }),
+      keepalive: true,
+    }).catch(() => {
+      /* ver o bloco acima: não há erro aqui que valha segurar a pessoa */
+    })
+    setDuvidaEnviada(true)
+  }
 
   const situacaoCpf = situacaoDocumento(cpf)
 
@@ -117,8 +153,7 @@ export function Aceite({
 
         <a
           href={linkDuvida}
-          target="_blank"
-          rel="noopener noreferrer"
+          rel="noopener"
           className="mt-5 flex min-h-12 items-center justify-center rounded-lg border border-borda bg-superficie text-sm font-medium text-tinta"
         >
           Falar com {nomePrestador || 'o prestador'}
@@ -160,8 +195,8 @@ export function Aceite({
             />
             {situacaoCpf === 'invalido' && (
               <span className="text-xs text-atencao-forte">
-                Esse {rotuloDocumento(cpf)} parece ter algum número trocado. Dá para confirmar
-                assim mesmo.
+                Esse {rotuloDocumento(cpf)} parece ter algum número trocado. Dá para confirmar assim
+                mesmo.
               </span>
             )}
           </label>
@@ -203,6 +238,109 @@ export function Aceite({
     )
   }
 
+  // ---- a dúvida: uma pergunta de um toque antes do WhatsApp ---------------
+  if (etapa === 'duvida') {
+    const restantes = LIMITE_MOTIVO_TEXTO - motivoTexto.length
+
+    /*
+      Cada opção é uma ÂNCORA, não um botão com handler que navega depois. É a
+      diferença entre funcionar e não funcionar no iPhone: âncora navega dentro
+      do gesto; `window.open` depois de um await é bloqueado. O onClick só
+      dispara o registro de lado, sem segurar nada.
+
+      SEM target="_blank", e isso é achado medido, não estilo — está em
+      dialogo-envio.tsx: o wa.me é universal link, o iOS o intercepta e passa
+      para o WhatsApp, e numa aba nova essa passagem falha com frequência e
+      sobra uma aba em branco. Na mesma aba, o sistema assume e o app abre.
+
+      É também o que torna `keepalive` no POST obrigatório em vez de
+      precaução: a página SAI de verdade quando o link é tocado.
+    */
+    const opcao =
+      'flex min-h-13 items-center justify-center rounded-xl border border-borda-controle bg-superficie px-4 text-base font-medium text-tinta'
+
+    return (
+      <section className="mt-4 rounded-2xl border border-borda bg-superficie px-5 py-6">
+        <h2 className="text-lg font-semibold text-tinta">O que te deixou em dúvida?</h2>
+        <p className="mt-1 text-sm leading-relaxed text-tinta-suave">
+          Responder ajuda {nomePrestador || 'o prestador'} a já chegar com a resposta. Se preferir,
+          é só ir direto.
+        </p>
+
+        {!escrevendo && (
+          <div className="mt-5 flex flex-col gap-2">
+            {MOTIVOS_DUVIDA.filter((m) => m.valor !== 'outro').map((m) => (
+              <a
+                key={m.valor}
+                href={linkDuvida}
+                rel="noopener"
+                onClick={() => registrarDuvida(m.valor)}
+                className={opcao}
+              >
+                {m.rotulo}
+              </a>
+            ))}
+
+            {/* "Outro" é o único que não abre o WhatsApp no mesmo toque: precisa
+                do campo antes. Os três de cima cobrem a maioria em um toque. */}
+            <button type="button" onClick={() => setEscrevendo(true)} className={opcao}>
+              Outro
+            </button>
+          </div>
+        )}
+
+        {escrevendo && (
+          <div className="mt-5 flex flex-col gap-2">
+            <textarea
+              value={motivoTexto}
+              onChange={(e) => setMotivoTexto(e.target.value.slice(0, LIMITE_MOTIVO_TEXTO))}
+              rows={3}
+              autoFocus
+              placeholder="Em poucas palavras, o que ficou faltando?"
+              className="rounded-lg border border-borda bg-superficie px-3 py-2.5 text-base leading-relaxed text-tinta outline-none focus:border-tinta focus:ring-2 focus:ring-tinta/15"
+            />
+            <span className="self-end text-xs text-tinta-suave">
+              {restantes} caractere{restantes === 1 ? '' : 's'}
+            </span>
+
+            <a
+              href={linkDuvida}
+              rel="noopener"
+              onClick={() => registrarDuvida('outro', motivoTexto)}
+              className="flex min-h-14 items-center justify-center rounded-xl bg-tinta text-base font-semibold text-white"
+            >
+              Continuar
+            </a>
+          </div>
+        )}
+
+        {/* Responder é opcional, e a saída fica visível o tempo todo — não
+            escondida atrás de um "pular" pequeno no rodapé. */}
+        <a
+          href={linkDuvida}
+          rel="noopener"
+          className="mt-4 flex min-h-12 items-center justify-center text-sm font-medium text-tinta-suave underline underline-offset-4"
+        >
+          Só quero falar
+        </a>
+
+        {duvidaEnviada && (
+          <p className="mt-3 text-center text-sm text-tinta-suave">
+            Anotado. {nomePrestador || 'O prestador'} vai ver isso.
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setEtapa('convite')}
+          className="mt-1 min-h-11 w-full text-sm text-tinta-suave underline underline-offset-4"
+        >
+          Voltar
+        </button>
+      </section>
+    )
+  }
+
   // ---- o convite: só o botão ----------------------------------------------
   return (
     <section className="mt-4 flex flex-col gap-2">
@@ -221,15 +359,17 @@ export function Aceite({
         Recusa explícita encerra a conversa e não deixa nada para o prestador
         fazer. Dúvida mantém o canal aberto — e a maior parte das recusas em
         obra é dúvida não respondida, não desinteresse.
+
+        O que mudou: agora ela passa por uma pergunta de um toque antes do
+        WhatsApp. O destino continua o mesmo, e pular continua sendo um toque.
       */}
-      <a
-        href={linkDuvida}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={() => setEtapa('duvida')}
         className="flex min-h-12 items-center justify-center rounded-xl border border-borda-controle bg-superficie text-sm font-semibold text-tinta"
       >
         Tenho uma dúvida
-      </a>
+      </button>
     </section>
   )
 }

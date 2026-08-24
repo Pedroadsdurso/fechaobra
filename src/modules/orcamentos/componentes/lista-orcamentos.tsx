@@ -50,10 +50,7 @@ function grupoDe(orcamento: OrcamentoNaLista): Grupo {
 }
 
 function normalizar(texto: string) {
-  return texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
 const TOM_VALIDADE: Record<TomValidade, string> = {
@@ -257,6 +254,26 @@ function Cartao({
           </p>
         )}
 
+        {/*
+          A dúvida do cliente, que é a informação mais acionável que este
+          cartão pode carregar: não "ele sumiu", e sim ONDE ele parou.
+
+          Fica junto do estado, e não substitui a chamada de urgência — as duas
+          respondem coisas diferentes ("visto há 4 dias" é quando, "parou no
+          preço" é o quê). E repare que o status continua enviado ou
+          visualizado: dúvida não tira o orçamento da fila, põe legenda nele.
+        */}
+        {orcamento.duvida && (
+          <p className="mt-2 rounded-lg border-l-2 border-atencao bg-atencao/10 px-2.5 py-1.5 text-xs leading-snug text-atencao-forte">
+            <span className="font-semibold">Parou em: {orcamento.duvida.rotulo}</span>
+            {orcamento.duvida.texto && (
+              <span className="mt-0.5 block font-normal italic">
+                &ldquo;{orcamento.duvida.texto}&rdquo;
+              </span>
+            )}
+          </p>
+        )}
+
         {/* O prestador não pode descobrir isso na hora de emitir a nota. */}
         {orcamento.enderecoDivergente && (
           <p className="mt-2 rounded-lg bg-atencao/10 px-2.5 py-1.5 text-xs text-atencao-forte">
@@ -409,8 +426,8 @@ export function ListaOrcamentos({ orcamentos }: { orcamentos: OrcamentoNaLista[]
         </div>
         <h2 className="text-base font-semibold text-tinta">Seu primeiro orçamento</h2>
         <p className="mt-1 max-w-sm text-sm text-tinta-suave">
-          Escolha o tipo de serviço e o escopo, as exclusões, a garantia e as condições vêm
-          prontos. Você ajusta os itens e manda o PDF pelo WhatsApp.
+          Escolha o tipo de serviço e o escopo, as exclusões, a garantia e as condições vêm prontos.
+          Você ajusta os itens e manda o PDF pelo WhatsApp.
         </p>
         <div className="mt-5">
           <BotaoNovoOrcamento rotulo="Criar orçamento" />

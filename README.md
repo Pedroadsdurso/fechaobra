@@ -134,6 +134,58 @@ virar imagem, este comando falha com código 1.
 - **O documento não conhece o banco**: recebe `OrcamentoDocumento`, um formato
   próprio. Na Fase 2 entra um adaptador entre as tabelas e esse tipo.
 
+- **O dia da cota do Google zera à meia-noite no Pacífico, não em São Paulo.**
+  Contar em fuso local faz o contador divergir do real e o 429 chegar sem
+  aviso. A virada cai às 4h de Brasília no verão americano e às 5h fora dele —
+  quem testa de madrugada vê o contador local zerar enquanto o do Google não
+  zerou. `inicioDoDiaDeCota()` em `modules/ia/limite.ts` deriva do relógio de
+  parede em `America/Los_Angeles`, e não de um deslocamento fixo, para
+  atravessar a mudança de horário de verão sem ajuste.
+
+- **Em insert em lote pelo PostgREST, chave ausente numa linha vira NULL
+  explícito e atropela o DEFAULT da coluna.** Ponha todas as chaves em todas as
+  linhas. O PostgREST unifica as chaves do array inteiro e preenche o que falta
+  com NULL — então `status` omitido em duas linhas de três não cai no
+  `default 'ativa'`, cai em `null` e bate na constraint `not null`. Vale para
+  `recursos_liberados`, `liberacoes` e qualquer tabela com DEFAULT. Falha
+  barulhento, o que é sorte: se a coluna aceitasse nulo, a linha entraria
+  errada e calada.
+
+- **`exigirRecurso` cobra acesso E recurso, nessa ordem.** Quem não comprou
+  recebe `SemAcesso` e vai para a tela de compra, não `SemRecurso`, que
+  mandaria procurar um botão que não existe para ela. A ordem é a mensagem
+  certa; a soma é a tranca: sem ela, uma linha solta em `recursos_liberados`
+  daria um pedaço do produto a quem nunca pagou os R$ 47.
+
+- **Nenhuma âncora de wa.me no produto usa `target="_blank"`.** O iOS
+  intercepta o universal link e passa para o app; em aba nova essa passagem
+  falha e sobra aba em branco. Vale para toda âncora de WhatsApp, não só o
+  diálogo de envio — o achado nasceu lá (`dialogo-envio.tsx`), mas a página
+  pública inteira estava com o mesmo problema até a varredura de agosto/2026.
+  Consequência de projeto: a página **sai de verdade** quando o link é tocado,
+  então qualquer registro que precise viajar junto vai de
+  `fetch(..., { keepalive: true })`, nunca de `await`.
+
+- **Dúvida do cliente não é recusa, e não mexe no status.** O link público não
+  tem botão de "Recusar" — tem "Tenho uma dúvida", e o motivo é capturado ali
+  (migration 0010, evento `tipo='duvida'`). O orçamento continua `enviado` ou
+  `visualizado` e `respondido_em` continua nulo, porque mudar o status tiraria
+  o orçamento da fila de trabalho do prestador exatamente quando ele mais
+  precisa aparecer nela. Ver a decisão original no cabeçalho de `aceite.tsx`.
+
+  **`POST /api/p/[token]/duvida` devolve 204 e ninguém espera a resposta. A
+  ausência de tratamento de erro no cliente é deliberada, não esquecimento.**
+  Quem for mexer nisto vai querer "consertar" com `await` e uma mensagem de
+  falha — e vai quebrar o fluxo. Duas razões, e a segunda decide:
+
+  1. **A conversa vale mais que o dado.** Registro que falha custa uma
+     informação útil ao prestador; conversa que falha custa a venda. Não há
+     erro aqui que justifique segurar a pessoa numa tela.
+  2. **Abrir link depois de um `await` é bloqueado no Safari do iPhone**,
+     porque já não está dentro do gesto do usuário. Por isso cada opção é uma
+     **âncora de verdade**, que navega no próprio toque, e o POST viaja junto
+     com `fetch(..., { keepalive: true })`, que sobrevive à página sair.
+
 ### Variável de ambiente em Client Component nunca
 
 Toda URL e toda configuração é resolvida **no servidor** e passada por prop.
