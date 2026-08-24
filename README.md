@@ -231,6 +231,70 @@ Next troca esses imports por RPC, nada deles vai para o bundle, e ler
 `SUPABASE_SERVICE_ROLE_KEY` ali é o comportamento correto. Um check que acusasse
 isso ensinaria a ignorá-lo.
 
+### O que sai para a IA é montado por inclusão
+
+**Monte por inclusão, nunca filtre por exclusão.** A diferença não é de estilo,
+é de modo de falhar. `delete payload.cpf` funciona até alguém acrescentar uma
+coluna à tabela — e aí o campo novo **vaza por padrão**, calado. Montar o
+literal à mão (`{ tipoServico, descricao }`) faz o padrão ser não vazar, e
+vazar exigir um ato deliberado.
+
+O que pode sair: tipo de serviço, título do orçamento, descrições dos itens. O
+que nunca sai: nome do cliente, endereço da obra, CPF, telefone, valores
+unitários, valores totais, nome ou dados da empresa do prestador.
+
+O texto livre da extração é o pedido, então vai inteiro — e é por isso que a
+folha avisa, **antes** de gerar, que aquele campo é enviado.
+
+```
+npm run verificar:saneamento    # roda sozinho antes de `next build`
+```
+
+Nada disso quebra `tsc` nem teste comum, então a verificação é comportamental:
+monta o payload a partir de um rascunho cheio de dado sensível e conta o que
+sobreviveu. Valida também que **só `modules/ia/gemini.ts` fala com a API do
+Gemini e lê `GEMINI_API_KEY`** — um segundo `fetch` em qualquer outro arquivo
+passaria por fora da cota, do registro de uso e do limite de taxa.
+
+Quebrando de propósito (trocando o literal por um spread), o check acusa os
+nove campos sensíveis vazando.
+
+### A IA não estima preço, e a garantia é o schema
+
+Pedir "não invente preços" na instrução é confiar na boa vontade do modelo. O
+schema mandado ao Gemini em `modules/ia/extrair-itens.ts` **não tem campo de
+valor** — não existe a casa onde a regra seria desobedecida, e o item chega no
+editor com `valorUnitario` vazio. Quem acrescentar `valorUnitario` ao schema
+"para adiantar" estará desfazendo a única garantia real que existe ali.
+
+### Defeito que se repete vira verificador, não mais uma correção
+
+**Três ocorrências do mesmo defeito significam que vai haver uma quarta. Quando
+um defeito se repete em lugares diferentes, o conserto é um verificador que roda
+no build, não mais uma correção pontual.**
+
+O caso que originou a regra: `target="_blank"` em âncora de wa.me. O achado é
+antigo e estava comentado em `dialogo-envio.tsx` — o iOS intercepta o universal
+link e passa para o WhatsApp, e em aba nova essa passagem falha e sobra aba em
+branco. Corrigiu-se **um** arquivo.
+
+Meses depois o mesmo defeito estava em mais três lugares: as âncoras da página
+pública, a faixa de "orçamento venceu" e o botão de WhatsApp da lista do painel.
+Um deles fui eu que reintroduzi, copiando uma âncora antiga ao escrever o fluxo
+da dúvida — com o comentário explicando o problema a duas telas de distância.
+
+```
+npm run verificar:whatsapp    # roda sozinho antes de `next build`
+```
+
+`scripts/verificar-whatsapp.mjs` olha só os arquivos que mexem com WhatsApp e
+falha se uma âncora com `target="_blank"` tiver `href` que não seja caminho
+interno. Ignora comentários — na primeira execução ele acusou os próprios avisos
+contra o defeito — e libera `href` interno, que é o caso do "Ver em PDF", onde
+abrir noutra aba é o certo: ninguém quer perder o orçamento para ler o anexo.
+
+Como todo check daqui, foi validado quebrando de propósito o que ele guarda.
+
 ### `transform` em ancestral quebra todo `position: fixed` descendente
 
 **Um ancestral com `transform` (ou `filter`, ou `will-change: transform`) vira
@@ -274,7 +338,7 @@ código está correto — ele só não executa. O que some é a resposta ao cliq
 
 ```
 npm run verificar:hidratacao                                  # local
-BASE=https://fechaobraa.vercel.app npm run verificar:hidratacao  # produção
+BASE=https://app.fechaobra.online npm run verificar:hidratacao  # produção
 ```
 
 `scripts/verificar-hidratacao.mjs` sobe um Chrome headless por CDP — sem

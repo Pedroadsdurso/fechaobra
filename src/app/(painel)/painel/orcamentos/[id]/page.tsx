@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { listarClientes } from '@/modules/clientes/consultas'
+import { temRecurso } from '@/modules/acesso/recursos'
 import { carregarMarca } from '@/modules/perfil/consultas'
 import { urlBase } from '@/lib/url-base'
 import { EditorOrcamento } from '@/modules/orcamentos/componentes/editor-orcamento'
@@ -12,11 +13,14 @@ export const metadata: Metadata = { title: 'Editar orçamento' }
 export default async function PaginaOrcamento({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [carregado, clientes, biblioteca, marca] = await Promise.all([
+  const [carregado, clientes, biblioteca, marca, temIaOrcamento] = await Promise.all([
     carregarOrcamento(id),
     listarClientes(),
     listarItensBiblioteca(),
     carregarMarca(),
+    // Decide se o botão APARECE. A tranca de verdade é o exigirRecurso na
+    // Server Action — esconder botão é conveniência de interface, não guarda.
+    temRecurso('ia_orcamento'),
   ])
 
   // O RLS já devolve vazio para orçamento de outro usuário; aqui isso vira 404.
@@ -36,6 +40,7 @@ export default async function PaginaOrcamento({ params }: { params: Promise<{ id
         // Resolvida aqui, no servidor: no navegador as variáveis da Vercel
         // não existem. Ver lib/url-base.ts.
         urlBase={urlBase()}
+        temIaOrcamento={temIaOrcamento}
         // A URL do logo já vem assinada daqui: o bucket é privado e o preview
         // roda no navegador, que não tem como assinar nada sozinho.
         empresa={{

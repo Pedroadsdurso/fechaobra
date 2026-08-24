@@ -147,7 +147,9 @@ function LinhaItem({
               ))}
             </select>
 
-            <span className="text-sm font-medium text-tinta">{formatarMoeda(totalDoItem(item))}</span>
+            <span className="text-sm font-medium text-tinta">
+              {formatarMoeda(totalDoItem(item))}
+            </span>
           </div>
 
           <div className="flex gap-1">
@@ -180,6 +182,7 @@ export function EditorItens({
   aoRemover,
   aoReordenar,
   aoAdicionar,
+  aoDescrever,
   aoAbrirBiblioteca,
   aoGuardarNaBiblioteca,
 }: {
@@ -188,6 +191,8 @@ export function EditorItens({
   aoRemover: (id: string) => void
   aoReordenar: (itens: ItemEditor[]) => void
   aoAdicionar: () => void
+  /** Nulo quando a conta não tem o recurso de IA: sem botão, sem promessa. */
+  aoDescrever: (() => void) | null
   aoAbrirBiblioteca: () => void
   aoGuardarNaBiblioteca: (item: ItemEditor) => void
 }) {
@@ -255,9 +260,32 @@ export function EditorItens({
         </DndContext>
       )}
 
-      <Botao type="button" variante="secundario" tamanho="grande" larguraTotal onClick={aoAdicionar}>
+      <Botao
+        type="button"
+        variante="secundario"
+        tamanho="grande"
+        larguraTotal
+        onClick={aoAdicionar}
+      >
         Adicionar item
       </Botao>
+
+      {/*
+        Abaixo de "Adicionar item", não acima: o caminho manual continua sendo
+        o principal, e quem já sabe o que vai lançar não deve tropeçar num
+        atalho de IA antes do campo que ele procurava.
+      */}
+      {aoDescrever && (
+        <Botao
+          type="button"
+          variante="secundario"
+          tamanho="grande"
+          larguraTotal
+          onClick={aoDescrever}
+        >
+          Descrever em texto
+        </Botao>
+      )}
 
       {itens.length > 0 && (
         <dl className="rounded-xl border border-borda bg-superficie px-4 py-3 text-sm">

@@ -28,6 +28,7 @@ import { STATUS_ORCAMENTO, TIPOS_SERVICO, VALIDADE_PADRAO_DIAS } from '../consta
 import type { ItemBiblioteca, ItemEditor, Pacote, RascunhoOrcamento } from '../tipos'
 
 import { DialogoBiblioteca } from './dialogo-biblioteca'
+import { DialogoDescrever } from './dialogo-descrever'
 import { DialogoEnvio } from './dialogo-envio'
 import { EditorItens } from './editor-itens'
 import { PainelPacotes } from './painel-pacotes'
@@ -107,6 +108,7 @@ export function EditorOrcamento({
   biblioteca,
   empresa,
   urlBase,
+  temIaOrcamento,
 }: {
   inicial: RascunhoOrcamento
   clientes: Cliente[]
@@ -114,10 +116,12 @@ export function EditorOrcamento({
   empresa: EmpresaDocumento
   /** URL pública da aplicação, resolvida no servidor. */
   urlBase: string
+  temIaOrcamento: boolean
 }) {
   const [rascunho, setRascunho] = useState(inicial)
   const [itensBiblioteca, setItensBiblioteca] = useState(biblioteca)
   const [bibliotecaAberta, setBibliotecaAberta] = useState(false)
+  const [descreverAberto, setDescreverAberto] = useState(false)
   const [salvamento, setSalvamento] = useState<Salvamento>('parado')
   const [aviso, setAviso] = useState('')
   const [substituirTextos, setSubstituirTextos] = useState(false)
@@ -261,6 +265,11 @@ export function EditorOrcamento({
 
   const adicionarItem = useCallback(() => {
     setRascunho((atual) => ({ ...atual, itens: [...atual.itens, novoItem()] }))
+  }, [])
+
+  /** Os itens que voltaram da IA, já revisados pelo prestador na folha. */
+  const adicionarItens = useCallback((novos: ItemEditor[]) => {
+    setRascunho((atual) => ({ ...atual, itens: [...atual.itens, ...novos] }))
   }, [])
 
   async function guardarNaBiblioteca(item: ItemEditor) {
@@ -459,6 +468,7 @@ export function EditorOrcamento({
           aoReordenar={reordenarItens}
           aoAdicionar={adicionarItem}
           aoAbrirBiblioteca={() => setBibliotecaAberta(true)}
+          aoDescrever={temIaOrcamento ? () => setDescreverAberto(true) : null}
           aoGuardarNaBiblioteca={guardarNaBiblioteca}
         />
 
@@ -620,6 +630,13 @@ export function EditorOrcamento({
             </div>
           )}
         </div>
+
+        <DialogoDescrever
+          aberto={descreverAberto}
+          aoFechar={() => setDescreverAberto(false)}
+          tipoServico={rascunho.tipoServico}
+          aoAdicionar={adicionarItens}
+        />
 
         <DialogoBiblioteca
           aberto={bibliotecaAberta}
