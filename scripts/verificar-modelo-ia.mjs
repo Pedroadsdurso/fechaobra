@@ -84,7 +84,12 @@ const schema = {
   required: ['itens'],
 }
 
-const ALVOS = candidatos.filter((n) => /lite/i.test(n) && /2\.5|3/.test(n))
+/*
+  Só os Flash Lite de texto. Fora: -image e -tts, que são outra modalidade, e
+  -preview, que não é base para produção. Cada nome aqui custa uma requisição
+  da cota do dia — não vale gastar em modelo que não seria escolhido.
+*/
+const ALVOS = candidatos.filter((n) => /flash-lite$/.test(n) && !/image|tts|preview/.test(n))
 console.log(`\n  === responseSchema: ${ALVOS.length} modelo(s) ===\n`)
 
 for (const modelo of ALVOS) {
