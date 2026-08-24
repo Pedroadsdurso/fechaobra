@@ -47,7 +47,7 @@ function paraNumero(texto: string) {
  * ser apagado da lista.
  */
 export async function criarRascunho() {
-  await exigirAcesso()
+  await exigirAcesso('criarRascunho')
   const { supabase, user } = await exigirUsuario()
 
   // O `numero` aparece como obrigatório na tipagem gerada porque a coluna é
@@ -81,7 +81,7 @@ export async function criarRascunho() {
  * chama só dispara isto quando algo mudou de verdade.
  */
 export async function salvarRascunho(rascunho: RascunhoOrcamento): Promise<ResultadoSalvar> {
-  await exigirAcesso()
+  await exigirAcesso('salvarRascunho')
   const { supabase, user } = await exigirUsuario()
 
   const dias = Number(rascunho.validadeDias) || VALIDADE_PADRAO_DIAS
@@ -201,7 +201,7 @@ async function salvarPacotes(
 export async function salvarItemNaBiblioteca(
   item: Pick<ItemEditor, 'descricao' | 'unidade' | 'valorUnitario' | 'tipo'>,
 ): Promise<{ ok: boolean; erro?: string; item?: ItemBiblioteca }> {
-  await exigirAcesso()
+  await exigirAcesso('salvarItemNaBiblioteca')
   const descricao = item.descricao.trim()
   if (!descricao) return { ok: false, erro: 'Descreva o item antes de guardar.' }
 
@@ -251,7 +251,7 @@ export async function salvarItemNaBiblioteca(
 }
 
 export async function apagarItemBiblioteca(id: string): Promise<{ ok: boolean }> {
-  await exigirAcesso()
+  await exigirAcesso('apagarItemBiblioteca')
   const { supabase, user } = await exigirUsuario()
   const { error } = await supabase
     .from('itens_biblioteca')
@@ -263,7 +263,7 @@ export async function apagarItemBiblioteca(id: string): Promise<{ ok: boolean }>
 }
 
 export async function apagarOrcamento(id: string): Promise<{ ok: boolean; erro?: string }> {
-  await exigirAcesso()
+  await exigirAcesso('apagarOrcamento')
   const { supabase, user } = await exigirUsuario()
 
   const { error } = await supabase.from('orcamentos').delete().eq('id', id).eq('user_id', user.id)
@@ -321,7 +321,7 @@ export async function buscarTextosPadrao(tipoServico: string): Promise<TextosDoS
 export async function duplicarOrcamento(
   id: string,
 ): Promise<{ ok: boolean; id?: string; erro?: string }> {
-  await exigirAcesso()
+  await exigirAcesso('duplicarOrcamento')
   const { supabase, user } = await exigirUsuario()
 
   const { data: origem } = await supabase
@@ -424,7 +424,7 @@ export async function enviarOrcamento(id: string): Promise<{
   token?: string
   jaEstavaEnviado?: boolean
 }> {
-  await exigirAcesso()
+  await exigirAcesso('enviarOrcamento')
   const { supabase, user } = await exigirUsuario()
 
   const { data: orcamento } = await supabase
@@ -486,7 +486,7 @@ export async function marcarComoTratado(
   id: string,
   tratado: boolean,
 ): Promise<{ ok: boolean; erro?: string }> {
-  await exigirAcesso()
+  await exigirAcesso('marcarComoTratado')
   const { supabase, user } = await exigirUsuario()
 
   const { error } = await supabase

@@ -49,7 +49,7 @@ export async function criarCliente(
   _anterior: EstadoCliente,
   dados: FormData,
 ): Promise<EstadoCliente> {
-  await exigirAcesso()
+  await exigirAcesso('criarCliente')
   const resultado = extrair(dados)
   if (!resultado.success) return { errosPorCampo: resultado.error.flatten().fieldErrors }
 
@@ -80,7 +80,7 @@ export async function atualizarCliente(
   _anterior: EstadoCliente,
   dados: FormData,
 ): Promise<EstadoCliente> {
-  await exigirAcesso()
+  await exigirAcesso('atualizarCliente')
   const id = dados.get('id')
   if (typeof id !== 'string' || !id) return { erro: 'Cliente não identificado.' }
 
@@ -112,7 +112,7 @@ export async function atualizarCliente(
 }
 
 export async function apagarCliente(id: string): Promise<{ ok: boolean; erro?: string }> {
-  await exigirAcesso()
+  await exigirAcesso('apagarCliente')
   const { supabase, user } = await exigirUsuario()
 
   const { error } = await supabase.from('clientes').delete().eq('id', id).eq('user_id', user.id)

@@ -28,7 +28,7 @@ async function exigirUsuario() {
 }
 
 export async function salvarMarca(_anterior: EstadoMarca, dados: FormData): Promise<EstadoMarca> {
-  await exigirAcesso()
+  await exigirAcesso('salvarMarca')
   const resultado = esquemaMarca.safeParse({
     nomeEmpresa: dados.get('nomeEmpresa'),
     responsavel: dados.get('responsavel'),
@@ -77,7 +77,7 @@ export async function salvarMarca(_anterior: EstadoMarca, dados: FormData): Prom
  * arquivo de outro.
  */
 export async function enviarLogo(dados: FormData): Promise<ResultadoLogo> {
-  await exigirAcesso()
+  await exigirAcesso('enviarLogo')
   const arquivo = dados.get('logo')
 
   if (!(arquivo instanceof File) || arquivo.size === 0) {
@@ -132,7 +132,7 @@ export async function enviarLogo(dados: FormData): Promise<ResultadoLogo> {
 }
 
 export async function removerLogo(): Promise<ResultadoLogo> {
-  await exigirAcesso()
+  await exigirAcesso('removerLogo')
   const { supabase, user } = await exigirUsuario()
   const admin = criarClienteAdministrador()
 

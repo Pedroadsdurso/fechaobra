@@ -2,6 +2,8 @@ import 'server-only'
 
 import { redirect } from 'next/navigation'
 
+import { criarClienteServidor } from '@/lib/supabase/servidor'
+
 import { temAcesso } from './consultas'
 
 /**
@@ -42,7 +44,49 @@ import { temAcesso } from './consultas'
  * guarda em nada, silenciosamente. Conferido — hoje nenhum chamador faz isso.
  * ===========================================================================
  */
-export async function exigirAcesso() {
+/**
+ * Quem foi recusado, para o log.
+ *
+ * Só roda no caminho da recusa: numa sessão liberada isto não é chamado, e
+ * `exigirAcesso` continua custando a mesma consulta de sempre.
+ *
+ * O try/catch cobre a LEITURA DO E-MAIL e nada mais. Não pode envolver o
+ * `redirect()` — engolir o NEXT_REDIRECT transformaria a guarda em nada. Log
+ * que falha vira "(não consegui ler a sessão)"; guarda não falha nunca.
+ */
+async function quemFoi() {
+  try {
+    const supabase = await criarClienteServidor()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    return user?.email ?? '(sem sessão)'
+  } catch {
+    return '(não consegui ler a sessão)'
+  }
+}
+
+/**
+ * @param acao Nome da Server Action que chamou, para o log.
+ *
+ * É passado à mão, e não deduzido da pilha de chamadas, porque o servidor de
+ * produção é minificado: `new Error().stack` traz nomes mangled quando traz
+ * algum. Um log que às vezes diz `t` e às vezes diz `criarRascunho` é pior que
+ * log nenhum — ele parece confiável até a hora em que alguém precisa dele.
+ *
+ * Sendo parâmetro obrigatório, ação nova não compila sem informar quem é.
+ */
+export async function exigirAcesso(acao: string) {
   if (await temAcesso()) return
+
+  /*
+    `warn`, não `error`: recusar quem não comprou é o produto funcionando, e
+    foi para tirar isto do balde de erro que o 500 saiu daqui. Mas também não é
+    `log` — volume aqui significa gente batendo numa porta fechada, e isso ou é
+    liberação que não chegou (alguém pagou e não recebeu) ou é sondagem. Nos
+    dois casos eu quero ver.
+  */
+  console.warn(`[acesso] ${await quemFoi()} chamou ${acao} sem compra ativa — mandado para /acesso`)
+
   redirect('/acesso')
 }

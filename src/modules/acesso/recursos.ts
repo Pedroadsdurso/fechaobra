@@ -162,7 +162,9 @@ export async function comRecurso<T>(
   recurso: Recurso,
   corpo: () => Promise<T>,
 ): Promise<T | RespostaSemRecurso> {
-  await exigirAcesso()
+  // O recurso identifica a ação: ia_textos é gerarTextosDoOrcamento,
+  // ia_orcamento é extrairItensDoTexto.
+  await exigirAcesso(`IA (${recurso})`)
 
   /*
     `temRecurso` é fechado por padrão em todos os caminhos: sem sessão, erro de
