@@ -115,7 +115,11 @@ async function principal() {
     await new Promise((r) => setTimeout(r, 3000))
   }
   const ev = async (e) => {
-    const r = await cdp('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true })
+    const r = await cdp('Runtime.evaluate', {
+      expression: e,
+      awaitPromise: true,
+      returnByValue: true,
+    })
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'erro')
     return r.result.value
   }
@@ -129,11 +133,38 @@ async function principal() {
     return null
   }
 
+  /**
+   * Espera o elemento existir, em vez de dormir um tempo fixo.
+   *
+   * Contra localhost os 3s do `ir()` bastavam. Contra produção não: a primeira
+   * carga é mais lenta, os campos ainda não estavam no DOM, o `find` devolvia
+   * undefined e o setter nativo estourava com "Illegal invocation" — que
+   * parece falha do produto e é falha do instrumento. Espera com condição não
+   * fica lenta quando a página é rápida nem falsa quando é devagar.
+   */
+  const esperarElemento = async (seletor, ms = 20000) => {
+    const fim = Date.now() + ms
+    while (Date.now() < fim) {
+      if (
+        await ev(`Boolean(document.querySelector(${JSON.stringify(seletor)}))`).catch(() => false)
+      ) {
+        return true
+      }
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    return false
+  }
+
   /** Cadastra pela tela e devolve o cookie de sessão (httpOnly — só via CDP). */
   async function criarSessao(email) {
     await cdp('Network.clearBrowserCookies')
     await ir(`${BASE}/cadastro`)
-    await ev(`window.digitar=(el,v)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}))}`)
+    if (!(await esperarElemento('input[name="senha"]'))) {
+      throw new Error(`/cadastro não renderizou os campos em ${BASE}`)
+    }
+    await ev(
+      `window.digitar=(el,v)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}))}`,
+    )
     await ev(`(()=>{const i=[...document.querySelectorAll('input')];
       digitar(i.find(e=>e.name==='nomeEmpresa'),'Gate Teste');
       digitar(i.find(e=>e.name==='email'),${JSON.stringify(email)});
@@ -205,8 +236,12 @@ async function principal() {
       })
 
     const contar = async (userId) =>
-      (await admin.from('orcamentos').select('id', { count: 'exact', head: true }).eq('user_id', userId))
-        .count ?? 0
+      (
+        await admin
+          .from('orcamentos')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+      ).count ?? 0
 
     /*
       CONTROLE PRIMEIRO.
