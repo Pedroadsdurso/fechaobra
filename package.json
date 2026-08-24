@@ -14,7 +14,8 @@
     "doc:render": "node scripts/render-documento.mjs",
     "doc:png": "node scripts/pdf-para-png.mjs",
     "doc:verificar": "node scripts/verificar-pdf.mjs",
-    "doc:imagens-mock": "node scripts/gerar-mock-imagens.mjs"
+    "doc:imagens-mock": "node scripts/gerar-mock-imagens.mjs",
+    "verificar:modelo": "node scripts/verificar-modelo-ia.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

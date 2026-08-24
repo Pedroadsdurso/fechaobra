@@ -88,6 +88,8 @@ export type Database = {
           criado_em: string
           id: string
           ip: string | null
+          motivo: string | null
+          motivo_texto: string | null
           nome_aceite: string | null
           orcamento_id: string
           tipo: string
@@ -97,6 +99,8 @@ export type Database = {
           criado_em?: string
           id?: string
           ip?: string | null
+          motivo?: string | null
+          motivo_texto?: string | null
           nome_aceite?: string | null
           orcamento_id: string
           tipo: string
@@ -106,6 +110,8 @@ export type Database = {
           criado_em?: string
           id?: string
           ip?: string | null
+          motivo?: string | null
+          motivo_texto?: string | null
           nome_aceite?: string | null
           orcamento_id?: string
           tipo?: string
@@ -418,6 +424,48 @@ export type Database = {
         }
         Relationships: []
       }
+      recursos_liberados: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          email: string
+          id: string
+          liberada_em: string
+          motivo_revogacao: string | null
+          pedido_id: string | null
+          recurso: string
+          revogada_em: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          email: string
+          id?: string
+          liberada_em?: string
+          motivo_revogacao?: string | null
+          pedido_id?: string | null
+          recurso: string
+          revogada_em?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          email?: string
+          id?: string
+          liberada_em?: string
+          motivo_revogacao?: string | null
+          pedido_id?: string | null
+          recurso?: string
+          revogada_em?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       textos_padrao: {
         Row: {
           conteudo: string
@@ -442,6 +490,45 @@ export type Database = {
           nicho?: string
           tipo_servico?: string
           tipo_texto?: string
+        }
+        Relationships: []
+      }
+      uso_ia: {
+        Row: {
+          criado_em: string
+          duracao_ms: number | null
+          id: string
+          modelo: string | null
+          motivo_falha: string | null
+          recurso: string
+          sucesso: boolean
+          tokens_entrada: number | null
+          tokens_saida: number | null
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          duracao_ms?: number | null
+          id?: string
+          modelo?: string | null
+          motivo_falha?: string | null
+          recurso: string
+          sucesso: boolean
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          duracao_ms?: number | null
+          id?: string
+          modelo?: string | null
+          motivo_falha?: string | null
+          recurso?: string
+          sucesso?: boolean
+          tokens_entrada?: number | null
+          tokens_saida?: number | null
+          user_id?: string
         }
         Relationships: []
       }
