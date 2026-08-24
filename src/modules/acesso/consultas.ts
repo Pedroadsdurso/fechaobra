@@ -63,15 +63,39 @@ export async function temAcesso() {
 }
 
 /**
- * Liga a liberação à conta recém-criada.
+ * Liga a liberação E os módulos à conta recém-criada.
  *
  * Roda depois do cadastro. A compra normalmente chega ANTES da conta existir:
- * a pessoa paga na Cakto e só então vem criar o login. Nesse intervalo a
- * liberação existe com user_id nulo, e é aqui que ela encontra o dono.
+ * a pessoa paga na Cakto e só então vem criar o login. Nesse intervalo as
+ * linhas existem com user_id nulo, e é aqui que elas encontram o dono.
  *
- * Service role de propósito: a policy de RLS é só de leitura, e escrever
- * daqui com a sessão do usuário seria permitir que ele mexesse na própria
- * liberação — o caminho mais curto para acesso vitalício de graça.
+ * ===========================================================================
+ * SÃO DUAS TABELAS, E ESQUECER A SEGUNDA CUSTA CARO
+ * ===========================================================================
+ * `liberacoes` era a única quando esta função nasceu. Desde os order bumps,
+ * quem compra no checkout com os três marcados gera CINCO linhas pendentes: a
+ * do vitalício e as de `recursos_liberados` (recuperacao, ia_textos,
+ * ia_orcamento, contratos).
+ *
+ * Vincular só a primeira produziria o pior sintoma possível para quem acabou
+ * de gastar R$ 108: entra no app, o núcleo funciona, e os módulos que ela
+ * pagou aparecem com cadeado. Nada de erro, nada de log — a pessoa concluiria
+ * que foi enganada.
+ *
+ * E não é que os módulos ficariam invisíveis para sempre: a policy de RLS de
+ * `recursos_liberados` também casa pelo e-mail do JWT, então a leitura
+ * funcionaria mesmo sem vínculo. O que quebraria é a REVOGAÇÃO por conta e
+ * qualquer consulta administrativa por user_id. Vincular as duas mantém as
+ * duas tabelas contando a mesma história.
+ * ===========================================================================
+ *
+ * Service role de propósito: a policy de RLS é só de leitura, e escrever daqui
+ * com a sessão do usuário seria permitir que ele mexesse na própria liberação
+ * — o caminho mais curto para acesso vitalício de graça.
+ *
+ * O `.is('user_id', null)` nas duas: linha já vinculada a OUTRA conta não é
+ * sobrescrita. Dois cadastros com o mesmo e-mail não deveriam existir, mas se
+ * existissem, roubar o vínculo silenciosamente seria a pior saída.
  *
  * Não lança: falhar a vinculação não pode derrubar um cadastro que deu certo.
  * O pior caso é a pessoa ver a tela de bloqueio e eu vincular à mão.
@@ -80,14 +104,23 @@ export async function vincularLiberacao(userId: string, email: string) {
   const normalizado = email.trim().toLowerCase()
   if (!normalizado) return
 
-  try {
-    const admin = criarClienteAdministrador()
-    await admin
-      .from('liberacoes')
-      .update({ user_id: userId })
-      .eq('email', normalizado)
-      .is('user_id', null)
-  } catch (e) {
-    console.error('não consegui vincular a liberação de', normalizado, e)
+  const admin = criarClienteAdministrador()
+
+  /*
+    Independentes de propósito: se a segunda falhar, a primeira continua feita.
+    Encadear com `await` uma depois da outra faria uma falha em `liberacoes`
+    levar os módulos junto — e o vitalício é o que a pessoa mais precisa que
+    funcione.
+  */
+  for (const tabela of ['liberacoes', 'recursos_liberados'] as const) {
+    try {
+      await admin
+        .from(tabela)
+        .update({ user_id: userId })
+        .eq('email', normalizado)
+        .is('user_id', null)
+    } catch (e) {
+      console.error(`não consegui vincular ${tabela} de`, normalizado, e)
+    }
   }
 }

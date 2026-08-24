@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import { dentroDoLimite, ipDaRequisicao } from '@/lib/limite-taxa'
 import { criarClienteAdministrador } from '@/lib/supabase/administrador'
+import { lerEvento, linhasDoEvento } from '@/lib/cakto/payload'
 import { processarEventoCakto } from '@/modules/acesso/processar-cakto'
 import type { Json } from '@/lib/tipos-banco'
 
@@ -154,21 +155,34 @@ export async function POST(request: NextRequest) {
     eu consigo reconstruir o que aconteceu. O contrário — processar e depois
     gravar — perderia o rastro justamente no caso em que ele é necessário.
   */
-  const { data: registro, error } = await admin
-    .from('eventos_cakto')
-    .insert({
-      tipo,
-      payload: limpo,
-      cabecalhos: cabecalhosLimpos(request),
-      segredo_valido: valido,
-      processado: false,
-    })
-    .select('id')
-    .single()
+  /*
+    UMA LINHA POR ITEM DE `data[]`.
 
-  if (error) {
+    Não é detalhe de arrumação: um checkout com order bumps chega como UM
+    evento com QUATRO compras dentro, cada uma com o seu pedido. Uma linha por
+    evento faria a idempotência — o par (tipo, pedido_id) — valer pelo
+    envelope, e não pela compra: o reembolso de um bump de R$ 10,90 marcaria o
+    checkout inteiro como tratado. Ver lib/cakto/payload.ts.
+
+    Evento sem item aproveitável (checkout_abandonment, payload torto) vira uma
+    linha só, com pedido nulo.
+  */
+  const leitura = lerEvento(limpo)
+  const { data: registros, error } = await admin
+    .from('eventos_cakto')
+    .insert(
+      linhasDoEvento(leitura, {
+        tipo,
+        payload: limpo,
+        cabecalhos: cabecalhosLimpos(request),
+        segredoValido: valido,
+      }),
+    )
+    .select('id')
+
+  if (error || !registros?.length) {
     // 500 faz a Cakto tentar de novo — melhor do que perder o evento calado.
-    console.error('falhei ao registrar evento da Cakto:', error.message)
+    console.error('falhei ao registrar evento da Cakto:', error?.message ?? 'insert sem retorno')
     return NextResponse.json({ erro: 'Não consegui registrar.' }, { status: 500 })
   }
 
@@ -179,10 +193,24 @@ export async function POST(request: NextRequest) {
   try {
     const r = await processarEventoCakto(admin, tipo ?? '', limpo)
 
-    await admin
-      .from('eventos_cakto')
-      .update({ processado: r.processado, pedido_id: r.pedidoId, nota: r.nota })
-      .eq('id', registro.id)
+    /*
+      O desfecho de cada pedido vai na linha DELE.
+
+      A correspondência é posicional, e é sólida porque as duas listas saem da
+      mesma leitura de `data[]`: `linhasDoEvento` e `processarEventoCakto`
+      chamam `lerEvento` sobre o mesmo payload, então têm o mesmo tamanho e a
+      mesma ordem. O `Math.min` é cinto de segurança, não expectativa — se um
+      dia divergirem, é melhor gravar o que dá do que estourar depois de já ter
+      liberado.
+    */
+    const total = Math.min(registros.length, r.linhas.length)
+    for (let i = 0; i < total; i++) {
+      const linha = r.linhas[i]
+      await admin
+        .from('eventos_cakto')
+        .update({ processado: linha.processado, pedido_id: linha.pedidoId, nota: linha.nota })
+        .eq('id', registros[i].id)
+    }
 
     /*
       200 mesmo quando não processou.
@@ -191,8 +219,16 @@ export async function POST(request: NextRequest) {
       vai chegar torto de novo. Melhor registrar como pendente e eu olhar do
       que a Cakto insistir por 30 minutos e desistir. Ver a nota sobre falhar
       alto em processar-cakto.ts.
+
+      `processado` na resposta é o do evento inteiro: só é true quando TODOS os
+      itens foram tratados. Um bump pendente num checkout de quatro não pode
+      ser reportado como sucesso.
     */
-    return NextResponse.json({ ok: true, processado: r.processado })
+    return NextResponse.json({
+      ok: true,
+      itens: r.linhas.length,
+      processado: r.linhas.every((l) => l.processado),
+    })
   } catch (e) {
     /*
       Erro de verdade — banco fora, por exemplo. Aqui 500 É o certo: a
@@ -201,7 +237,10 @@ export async function POST(request: NextRequest) {
     */
     const mensagem = e instanceof Error ? e.message : String(e)
     console.error('falhei ao processar evento da Cakto:', mensagem)
-    await admin.from('eventos_cakto').update({ nota: `erro: ${mensagem}` }).eq('id', registro.id)
+    await admin
+      .from('eventos_cakto')
+      .update({ nota: `erro: ${mensagem}` })
+      .in('id', registros.map((r) => r.id))
     return NextResponse.json({ erro: 'Falha ao processar.' }, { status: 500 })
   }
 }

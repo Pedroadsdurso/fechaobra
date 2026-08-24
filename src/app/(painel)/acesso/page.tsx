@@ -4,12 +4,21 @@ import { redirect } from 'next/navigation'
 import { Botao, classesBotao } from '@/componentes/ui/botao'
 import { SimboloFechaObra } from '@/componentes/marca/simbolo'
 import { acessoDoUsuario } from '@/modules/acesso/consultas'
+import { PRODUTO_PRINCIPAL, produtoDoPagamento } from '@/lib/cakto/produtos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
 export const metadata: Metadata = { title: 'Liberar acesso' }
 
-/** O checkout da Cakto. Trocar aqui quando a oferta mudar. */
-const LINK_COMPRA = 'https://pay.cakto.com.br/fkxh94h_1054119'
+/*
+  O checkout sai do catálogo, não de uma constante daqui.
+
+  Era literal até a 0011, e passou a apontar para o mesmo lugar de onde o
+  webhook lê o UUID do produto. A duplicata é justamente o que o comentário de
+  `linkCheckout` avisa: com o link em dois arquivos, o dia em que a oferta
+  mudar tem duas chances de dar errado, e o sintoma pior é o silencioso — esta
+  tela mandando para um checkout cujo retorno o webhook não reconhece.
+*/
+const LINK_COMPRA = produtoDoPagamento(PRODUTO_PRINCIPAL)?.linkCheckout ?? ''
 
 /**
  * O checkout já com o e-mail da conta preenchido.

@@ -35,15 +35,25 @@ import { exigirAcesso } from './guarda'
  * mudar bastante.
  */
 export type Recurso =
-  // Do order bump: um produto, quatro recursos.
+  // Dos três order bumps do checkout do FechaObra.
   | 'ia_textos'
   | 'ia_orcamento'
   | 'contratos'
   | 'recuperacao'
-  // Upsells, um produto cada.
-  | 'ia_audio'
-  | 'ia_medicao'
-  | 'calculadora'
+  /*
+    Dos três upsells, um produto cada.
+
+    Os nomes descrevem O QUE A PESSOA RECEBE, não a tecnologia por trás. Foram
+    'ia_audio', 'ia_medicao' e 'calculadora' até a 0011, e mudaram porque
+    "é IA" não é o que ela compra — ela compra falar o orçamento em vez de
+    digitar. E 'calculadora' sozinho não dizia calculadora de quê.
+
+    A renomeação foi segura porque nenhum dos três tinha sido concedido a
+    ninguém ainda; ver o bloco no fim de 0011_bumps_e_upsells.sql.
+  */
+  | 'audio_orcamento'
+  | 'medicao_foto'
+  | 'calculadora_material'
   // Previstos, ainda sem produto na Cakto.
   | 'perfil_publico'
   | 'relatorio_mensal'

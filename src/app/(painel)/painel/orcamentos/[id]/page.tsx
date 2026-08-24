@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { listarClientes } from '@/modules/clientes/consultas'
-import { checkoutDoRecurso } from '@/modules/acesso/produtos'
+import { checkoutDoRecurso } from '@/lib/cakto/produtos'
 import { temRecurso } from '@/modules/acesso/recursos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { carregarMarca } from '@/modules/perfil/consultas'

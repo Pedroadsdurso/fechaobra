@@ -53,6 +53,8 @@ export type Database = {
           criado_em: string
           id: string
           nota: string | null
+          offer_type: string | null
+          parent_order: string | null
           payload: Json
           pedido_id: string | null
           processado: boolean
@@ -64,6 +66,8 @@ export type Database = {
           criado_em?: string
           id?: string
           nota?: string | null
+          offer_type?: string | null
+          parent_order?: string | null
           payload: Json
           pedido_id?: string | null
           processado?: boolean
@@ -75,6 +79,8 @@ export type Database = {
           criado_em?: string
           id?: string
           nota?: string | null
+          offer_type?: string | null
+          parent_order?: string | null
           payload?: Json
           pedido_id?: string | null
           processado?: boolean

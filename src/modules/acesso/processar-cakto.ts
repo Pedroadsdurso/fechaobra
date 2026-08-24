@@ -2,6 +2,12 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import {
+  descreverItem,
+  ehProdutoPrincipal,
+  produtoDoPagamento,
+} from '@/lib/cakto/produtos'
+import { lerEvento, type ItemCakto, type LeituraEvento } from '@/lib/cakto/payload'
 import type { Database, Json } from '@/lib/tipos-banco'
 
 /**
@@ -12,13 +18,13 @@ import type { Database, Json } from '@/lib/tipos-banco'
  * ===========================================================================
  * Não mude isto sem reler o parágrafo inteiro.
  *
- * Parece que `data[0].status` seria a fonte mais confiável — é o estado do
+ * Parece que `data[n].status` seria a fonte mais confiável — é o estado do
  * pedido, afinal. Não é. Conferido no payload real da Cakto:
  *
- *     evento              data[0].status   refundedAt   chargedbackAt
- *     purchase_approved   "paid"           null         null
- *     refund              "paid"           null         null
- *     chargeback          "paid"           null         null
+ *     evento              status   refundedAt   chargedbackAt
+ *     purchase_approved   "paid"   null         null
+ *     refund              "paid"   null         null
+ *     chargeback          "paid"   null         null
  *
  * Os três chegam como "paid", com os carimbos de reembolso e chargeback
  * nulos. Só o campo `event`, no topo do payload, diz o que aconteceu.
@@ -32,8 +38,17 @@ import type { Database, Json } from '@/lib/tipos-banco'
  * mais confiável. É por isso que este comentário é do tamanho que é.
  * ===========================================================================
  *
- * Também conferido no payload real: `data` é um ARRAY (`payload.data[0]`),
- * não um objeto como a documentação descreve.
+ * ===========================================================================
+ * E VARRA `data[]` INTEIRO. `data[0]` NÃO É O PRINCIPAL.
+ * ===========================================================================
+ * A segunda regra desta casa, e ela custou uma reescrita. Ver o bloco de
+ * abertura de lib/cakto/payload.ts: no evento real 8X7Zs1S o item principal é
+ * o ÚLTIMO dos quatro, e `data[0]` é um bump de R$ 10,90.
+ *
+ * O vitalício sai do item cujo `product.id` é o do FechaObra, e de mais lugar
+ * nenhum. Nem por posição, nem por `offer_type === 'main'` — os upsells também
+ * chegam como 'main', cada um no evento deles.
+ * ===========================================================================
  */
 
 type Admin = SupabaseClient<Database>
@@ -41,57 +56,22 @@ type Admin = SupabaseClient<Database>
 /** Os únicos três que mexem em acesso. */
 const TRATADOS = new Set(['purchase_approved', 'refund', 'chargeback'])
 
-import { descreverProduto, produtoDoPagamento } from './produtos'
-
-export type Resultado = {
+/**
+ * O desfecho de UMA linha do log — e há uma linha por item de `data[]`.
+ *
+ * A correspondência com `linhasDoEvento` é 1:1 e na mesma ordem, de propósito:
+ * é o que deixa a rota gravar o desfecho de cada pedido na linha dele em vez
+ * de espremer quatro histórias diferentes numa `nota` só.
+ */
+export type LinhaResultado = {
+  /** Nulo só quando o evento não tinha item aproveitável. */
+  pedidoId: string | null
   processado: boolean
   /** Fica no log, para eu entender depois o que aconteceu sem reler o payload. */
   nota: string
-  pedidoId: string | null
 }
 
-type Pedido = {
-  id: string
-  email: string
-  /** `data[0].product.id`. Nulo quando o payload não traz produto. */
-  produtoId: string | null
-}
-
-/**
- * Tira do payload só o que a liberação precisa, e diz quando não dá.
- *
- * Devolve null se faltar qualquer um dos dois. Não há valor padrão nem
- * tentativa de adivinhar: ver `processarEventoCakto` para o porquê.
- */
-function lerPedido(payload: unknown): Pedido | null {
-  if (!payload || typeof payload !== 'object') return null
-  const corpo = payload as Record<string, unknown>
-
-  const dados = Array.isArray(corpo.data) ? corpo.data[0] : null
-  if (!dados || typeof dados !== 'object') return null
-  const pedido = dados as Record<string, unknown>
-
-  const id = typeof pedido.id === 'string' ? pedido.id.trim() : ''
-
-  const cliente = pedido.customer as Record<string, unknown> | undefined
-  const email = typeof cliente?.email === 'string' ? cliente.email.trim().toLowerCase() : ''
-
-  /*
-    Medido em evento real: `data[0].product` é
-    `{ id: '6ba610fb-…', name, type, short_id }` e `data[0].offer` é
-    `{ id: 'fkxh94h', price }`. Casamos pelo UUID do PRODUTO, não pela oferta:
-    um produto pode ter várias ofertas (promoção, teste de preço) e casar por
-    oferta quebraria na primeira delas.
-
-    Produto ausente não invalida o pedido — o vitalício de R$ 47 continua
-    sendo liberado normalmente. Só não concede recurso nenhum.
-  */
-  const produto = pedido.product as Record<string, unknown> | undefined
-  const produtoId = typeof produto?.id === 'string' ? produto.id.trim() : ''
-
-  if (!id || !email) return null
-  return { id, email, produtoId: produtoId || null }
-}
+export type Resultado = { linhas: LinhaResultado[] }
 
 export function eventoTratado(tipo: string | null) {
   return tipo !== null && TRATADOS.has(tipo)
@@ -102,6 +82,8 @@ export async function processarEventoCakto(
   tipo: string,
   payload: Json,
 ): Promise<Resultado> {
+  const leitura = lerEvento(payload)
+
   /*
     Os 12 outros eventos do catálogo — pix_gerado, boleto_gerado,
     subscription_*, checkout_abandonment, purchase_refused e companhia.
@@ -112,17 +94,21 @@ export async function processarEventoCakto(
     acesso, é aqui que se descobre que ele existe.
   */
   if (!eventoTratado(tipo)) {
-    return { processado: true, nota: `evento fora do escopo do acesso: ${tipo}`, pedidoId: null }
+    return {
+      linhas: paraCadaLinha(leitura, (item) => ({
+        pedidoId: item?.pedidoId ?? null,
+        processado: true,
+        nota: `evento fora do escopo do acesso: ${tipo}`,
+      })),
+    }
   }
-
-  const pedido = lerPedido(payload)
 
   /*
     FALHA ALTA COM DADO INCOMPLETO.
 
-    Sem id do pedido ou sem e-mail do comprador, nada acontece: não libera e
-    não revoga. Fica registrado como NÃO processado, e a resposta é 200 para
-    a Cakto não retentar em vão — retentar não vai completar um payload que
+    Nenhum item com id de pedido E e-mail: nada acontece, não libera e não
+    revoga. Fica registrado como NÃO processado, e a resposta é 200 para a
+    Cakto não retentar em vão — retentar não vai completar um payload que
     chegou torto.
 
     A assimetria é deliberada. Liberar de menos custa uma liberação manual;
@@ -130,77 +116,166 @@ export async function processarEventoCakto(
     engano tira a ferramenta de trabalho de quem pagou, no meio de um
     orçamento. Entre os três erros, os dois primeiros são baratos.
   */
-  if (!pedido) {
+  if (leitura.itens.length === 0) {
     return {
-      processado: false,
-      nota: 'payload sem data[0].id ou sem customer.email — nada foi liberado nem revogado',
-      pedidoId: null,
+      linhas: [
+        {
+          pedidoId: null,
+          processado: false,
+          nota: `${tipo} sem nenhum item utilizável em data[] (${leitura.total} recebido(s), todos sem id ou sem customer.email) — nada foi liberado nem revogado`,
+        },
+      ],
     }
   }
 
-  // ---- idempotência ------------------------------------------------------
   /*
-    A Cakto retenta até 5 vezes e não manda id de entrega em cabeçalho
-    (conferido: só user-agent CaktoBot/1.0 e traceparent). Os ids da Vercel
-    identificam a invocação, não o evento — numa retentativa viriam
-    diferentes e não serviriam para nada.
-
-    A chave é o par (tipo do evento, id do pedido). Reprocessar uma compra não
-    pode duplicar liberação; reprocessar um reembolso não pode fazer nada.
+    Item descartado num evento de acesso é alguém que pagou e pode não receber.
+    Vai na nota de TODAS as linhas do evento — não há linha própria para o item
+    que não existe, e enterrar isso só na primeira linha seria contar com quem
+    lê o log começar pelo começo.
   */
-  const { data: jaVisto } = await admin
-    .from('eventos_cakto')
-    .select('id')
-    .eq('tipo', tipo)
-    .eq('pedido_id', pedido.id)
-    .eq('processado', true)
-    .limit(1)
+  const alerta =
+    leitura.descartados > 0
+      ? `ATENÇÃO: ${leitura.descartados} de ${leitura.total} itens deste evento vieram sem id ou sem e-mail e foram ignorados`
+      : ''
 
-  if (jaVisto && jaVisto.length > 0) {
-    return { processado: true, nota: 'repetido — já processado antes', pedidoId: pedido.id }
-  }
+  const linhas =
+    tipo === 'purchase_approved'
+      ? await liberarEvento(admin, leitura)
+      : await revogarEvento(admin, leitura, tipo)
 
-  if (tipo === 'purchase_approved') return liberar(admin, pedido)
-  return revogar(admin, pedido, tipo)
+  if (!alerta) return { linhas }
+  return { linhas: linhas.map((l) => ({ ...l, nota: `${alerta} · ${l.nota}` })) }
 }
 
-async function liberar(admin: Admin, pedido: Pedido): Promise<Resultado> {
+/** Uma saída por linha do log, com a linha solta quando não houve item. */
+function paraCadaLinha(
+  leitura: LeituraEvento,
+  montar: (item: ItemCakto | null) => LinhaResultado,
+): LinhaResultado[] {
+  if (leitura.itens.length === 0) return [montar(null)]
+  return leitura.itens.map(montar)
+}
+
+
+// ===========================================================================
+// LIBERAÇÃO
+// ===========================================================================
+
+async function liberarEvento(admin: Admin, leitura: LeituraEvento): Promise<LinhaResultado[]> {
   /*
-    ORDEM DE CHEGADA NÃO É GARANTIDA.
-
-    O caso óbvio — purchase_approved depois de refund — a guarda logo abaixo
-    cobre, porque a liberação está lá, revogada. O caso invertido não:
-
-      refund(X) chega primeiro  -> não existe liberação de X, nada a revogar
-      purchase_approved(X) depois -> cria acesso para um pedido REEMBOLSADO
-
-    Acontece de verdade: se o purchase_approved falhar na entrega e a Cakto
-    retentar em 30 minutos, o refund pode passar na frente. E acontece com a
-    tabela zerada, como agora.
-
-    Por isso a pergunta certa não é "existe liberação revogada?", e sim "este
-    pedido já foi reembolsado ou contestado alguma vez?". A resposta está no
-    log de eventos, que guarda tudo o que chegou.
+    A conta pode já existir: quem paga depois de se cadastrar deve entrar
+    liberado sem precisar sair e voltar. Resolvido UMA vez por e-mail, fora do
+    laço: `listUsers` pagina mil contas, e chamá-lo quatro vezes para os quatro
+    itens do mesmo comprador seria quatro varreduras idênticas.
   */
-  const { data: revogacoes } = await admin
-    .from('eventos_cakto')
-    .select('tipo')
-    .eq('pedido_id', pedido.id)
-    .in('tipo', ['refund', 'chargeback'])
-    .limit(1)
-
-  if (revogacoes && revogacoes.length > 0) {
-    return {
-      processado: false,
-      nota: `compra aprovada para pedido que já tem ${revogacoes[0].tipo} registrado (${pedido.id}) — NÃO liberado, revisar à mão`,
-      pedidoId: pedido.id,
-    }
+  const contas = new Map<string, string | null>()
+  const acharConta = async (email: string) => {
+    if (!contas.has(email)) contas.set(email, await acharUsuarioPorEmail(admin, email))
+    return contas.get(email) ?? null
   }
 
+  const linhas: LinhaResultado[] = []
+
+  for (const item of leitura.itens) {
+    if (await jaProcessado(admin, 'purchase_approved', item.pedidoId)) {
+      linhas.push({ pedidoId: item.pedidoId, processado: true, nota: 'repetido — já processado antes' })
+      continue
+    }
+
+    /*
+      ORDEM DE CHEGADA NÃO É GARANTIDA.
+
+      O caso óbvio — purchase_approved depois de refund — a guarda de
+      `liberarVitalicio` cobre, porque a liberação está lá, revogada. O caso
+      invertido não:
+
+        refund(X) chega primeiro  -> não existe liberação de X, nada a revogar
+        purchase_approved(X) depois -> cria acesso para um pedido REEMBOLSADO
+
+      Acontece de verdade: se o purchase_approved falhar na entrega e a Cakto
+      retentar em 30 minutos, o refund pode passar na frente.
+
+      Por isso a pergunta certa não é "existe liberação revogada?", e sim "este
+      PEDIDO já foi reembolsado ou contestado alguma vez?". A resposta está no
+      log de eventos, que guarda tudo o que chegou — e agora guarda por item,
+      então a pergunta vale por bump, e não pelo checkout inteiro.
+    */
+    const revogacao = await revogacaoRegistrada(admin, item.pedidoId)
+    if (revogacao) {
+      linhas.push({
+        pedidoId: item.pedidoId,
+        processado: false,
+        nota: `compra aprovada para pedido que já tem ${revogacao} registrado (${item.pedidoId}, ${descreverItem(item)}) — NÃO liberado, revisar à mão`,
+      })
+      continue
+    }
+
+    const userId = await acharConta(item.email)
+    const notas: string[] = []
+    let processado = true
+
+    /*
+      ===========================================================================
+      A ASSERÇÃO: O FECHAOBRA NÃO PODE CHEGAR COMO BUMP
+      ===========================================================================
+      Todo o desenho assume que o produto principal é vendido como principal.
+      Se um dia ele chegar com `offer_type` diferente de 'main', a premissa
+      mudou — alguém o marcou como order bump de outro checkout na Cakto — e o
+      mapeamento inteiro precisa ser reconferido antes de conceder mais nada.
+
+      O que a asserção faz: grita no log e NÃO concede os módulos daquele item.
+      O que ela NÃO faz: bloquear o vitalício. Quem pagou R$ 47 pagou, seja
+      qual for a caixinha em que a Cakto tenha colocado o produto — e negar
+      acesso a um pagamento confirmado por causa de um campo de metadados é
+      exatamente o erro caro que a assimetria manda evitar.
+
+      Hoje o FechaObra não tem módulo nenhum no catálogo, então "não concede
+      módulos" não muda nada na prática. É de propósito: a guarda existe para o
+      dia em que ele tiver, e nesse dia ela já vai estar no lugar em vez de
+      precisar ser lembrada.
+      ===========================================================================
+    */
+    const principalDisfarcado =
+      ehProdutoPrincipal(item.produtoId) && item.offerType !== null && item.offerType !== 'main'
+
+    if (principalDisfarcado) {
+      console.warn(
+        `[cakto] ASSERÇÃO: produto principal ${item.produtoId} chegou com offer_type="${item.offerType}" ` +
+          `no pedido ${item.pedidoId}. Módulos NÃO concedidos. Reconferir o mapa em lib/cakto/produtos.ts.`,
+      )
+      notas.push(
+        `ASSERÇÃO VIOLADA: FechaObra com offer_type="${item.offerType}" — módulos deste item NÃO concedidos`,
+      )
+      processado = false
+    }
+
+    if (ehProdutoPrincipal(item.produtoId)) {
+      const vitalicio = await liberarVitalicio(admin, item, userId)
+      notas.push(vitalicio.nota)
+      if (!vitalicio.ok) processado = false
+    }
+
+    if (!principalDisfarcado) notas.push(await liberarModulos(admin, item, userId))
+
+    linhas.push({ pedidoId: item.pedidoId, processado, nota: notas.join(' · ') })
+  }
+
+  return linhas
+}
+
+/**
+ * O vitalício de R$ 47 — e só a partir do item do FechaObra.
+ *
+ * O `pedido_id` gravado aqui é o do ITEM PRINCIPAL, não o de `data[0]`. É essa
+ * escolha que faz o reembolso de um bump não alcançar o acesso: a revogação
+ * procura `liberacoes` por `pedido_id`, e o pedido do bump nunca vai casar.
+ */
+async function liberarVitalicio(admin: Admin, item: ItemCakto, userId: string | null) {
   const { data: existente } = await admin
     .from('liberacoes')
     .select('id, status, pedido_id')
-    .eq('email', pedido.email)
+    .eq('email', item.email)
     .maybeSingle()
 
   /*
@@ -214,24 +289,19 @@ async function liberar(admin: Admin, pedido: Pedido): Promise<Resultado> {
     Compra NOVA, com pedido_id diferente, reativa normalmente: quem foi
     reembolsado e depois comprou de novo tem direito ao acesso.
   */
-  if (existente?.status === 'revogada' && existente.pedido_id === pedido.id) {
+  if (existente?.status === 'revogada' && existente.pedido_id === item.pedidoId) {
     return {
-      processado: false,
-      nota: `compra aprovada para pedido já revogado (${pedido.id}) — NÃO reativado, revisar à mão`,
-      pedidoId: pedido.id,
+      ok: false,
+      nota: `compra aprovada para pedido já revogado (${item.pedidoId}) — NÃO reativado, revisar à mão`,
     }
   }
 
-  // A conta pode já existir: quem paga depois de se cadastrar deve entrar
-  // liberado sem precisar sair e voltar.
-  const userId = await acharUsuarioPorEmail(admin, pedido.email)
-
   const { error } = await admin.from('liberacoes').upsert(
     {
-      email: pedido.email,
+      email: item.email,
       user_id: userId,
       status: 'ativa',
-      pedido_id: pedido.id,
+      pedido_id: item.pedidoId,
       liberada_em: new Date().toISOString(),
       revogada_em: null,
       motivo_revogacao: null,
@@ -239,48 +309,67 @@ async function liberar(admin: Admin, pedido: Pedido): Promise<Resultado> {
     { onConflict: 'email' },
   )
 
-  if (error) throw new Error(`não consegui liberar ${pedido.email}: ${error.message}`)
-
-  const recursos = await liberarRecursos(admin, pedido, userId)
+  if (error) throw new Error(`não consegui liberar ${item.email}: ${error.message}`)
 
   return {
-    processado: true,
-    nota:
-      (userId ? 'liberado e vinculado à conta existente' : 'liberado, aguardando o cadastro') +
-      ` · ${recursos}`,
-    pedidoId: pedido.id,
+    ok: true,
+    nota: userId
+      ? 'vitalício liberado e vinculado à conta existente'
+      : 'vitalício liberado, aguardando o cadastro',
   }
 }
 
 /**
- * Os recursos que este produto concede, gravados com o pedido que os pagou.
+ * Os recursos que este item concede, gravados com o pedido que os pagou.
  *
  * ===========================================================================
  * O pedido_id NA LINHA É O QUE TORNA A REVOGAÇÃO CIRÚRGICA
  * ===========================================================================
- * Cada recurso nasce carimbado com o pedido que o pagou. Quando o reembolso
- * chegar, ele revoga `where pedido_id = <aquele>` — e por construção não
- * alcança recurso de outro produto nem o vitalício, que mora noutra tabela.
+ * Cada recurso nasce carimbado com o pedido que o pagou — o do ITEM, não o do
+ * checkout. Quando o reembolso chegar, ele revoga `where pedido_id = <aquele>`
+ * e por construção não alcança recurso de outro bump nem o vitalício, que mora
+ * noutra tabela e tem o pedido do item principal.
  *
  * Sem o carimbo, revogar exigiria olhar o catálogo e deduzir quais recursos
  * "provavelmente" vieram daquela compra. Dedução em revogação é como se tira
  * acesso de quem pagou.
  * ===========================================================================
  *
- * Não lança: recurso que falha não pode derrubar o vitalício que já foi
+ * Não lança: módulo que falha não pode derrubar o vitalício que já foi
  * gravado. Fica na nota do evento, que é o lugar de onde eu conserto à mão.
  */
-async function liberarRecursos(admin: Admin, pedido: Pedido, userId: string | null) {
-  const produto = produtoDoPagamento(pedido.produtoId)
-  if (!produto) return `sem recursos — ${descreverProduto(pedido.produtoId)}`
+async function liberarModulos(admin: Admin, item: ItemCakto, userId: string | null) {
+  const produto = produtoDoPagamento(item.produtoId)
+
+  if (!produto) {
+    /*
+      Produto que a Cakto vendeu e o mapa não conhece.
+
+      Vai para o console COM UUID, NOME E OFERTA. O UUID sozinho me obrigaria a
+      voltar ao payload para saber de que produto se trata, e é justamente na
+      hora em que isto aparece — alguém pagou e não recebeu — que eu não quero
+      estar caçando payload.
+
+      Não é exceção: a compra do item continua registrada, e o vitalício (se
+      este evento tiver o item principal) foi liberado normalmente. Só não há o
+      que conceder por um produto que ninguém mapeou.
+    */
+    console.warn(
+      `[cakto] ${descreverItem(item)} — pedido ${item.pedidoId}, ${item.email}. ` +
+        `Nenhum módulo concedido. Se o produto é novo, acrescente-o em lib/cakto/produtos.ts.`,
+    )
+    return `sem módulos — ${descreverItem(item)}`
+  }
+
+  if (produto.recursos.length === 0) return `${produto.apelido} — não concede módulo`
 
   const agora = new Date().toISOString()
   const linhas = produto.recursos.map((recurso) => ({
-    email: pedido.email,
+    email: item.email,
     user_id: userId,
     recurso,
     status: 'ativa',
-    pedido_id: pedido.id,
+    pedido_id: item.pedidoId,
     liberada_em: agora,
     revogada_em: null,
     motivo_revogacao: null,
@@ -296,10 +385,71 @@ async function liberarRecursos(admin: Admin, pedido: Pedido, userId: string | nu
     .upsert(linhas, { onConflict: 'email,recurso' })
 
   if (error) return `FALHOU ao liberar ${produto.apelido}: ${error.message}`
-  return `recursos liberados: ${produto.recursos.join(', ')} (${produto.apelido})`
+  return `${produto.apelido} liberou: ${produto.recursos.join(', ')}`
 }
 
-async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resultado> {
+
+// ===========================================================================
+// REVOGAÇÃO
+// ===========================================================================
+
+async function revogarEvento(
+  admin: Admin,
+  leitura: LeituraEvento,
+  tipo: string,
+): Promise<LinhaResultado[]> {
+  const linhas: LinhaResultado[] = []
+
+  for (const item of leitura.itens) {
+    if (await jaProcessado(admin, tipo, item.pedidoId)) {
+      linhas.push({ pedidoId: item.pedidoId, processado: true, nota: 'repetido — já processado antes' })
+      continue
+    }
+
+    const notas: string[] = []
+    let processado = true
+
+    /*
+      ===========================================================================
+      SÓ O ITEM DO FECHAOBRA CHEGA PERTO DE `liberacoes`
+      ===========================================================================
+      Antes de haver mapa de produtos, todo refund passava pela busca em
+      `liberacoes` — não havia como saber que aquele pedido era de um bump. O
+      resultado, para o reembolso de um bump, era a nota "não casa com a
+      liberação, revisar à mão" em TODA revogação de bump. Ruído em revisão é
+      pior que ruído em log: ele treina a pessoa a ignorar a lista onde moram
+      as contestações de verdade.
+
+      Agora o item diz de que produto é. Quando ele é um bump ou upsell
+      conhecido, o vitalício está fora de questão por definição e a busca nem
+      acontece.
+
+      Produto DESCONHECIDO continua passando pelo caminho cauteloso: não saber
+      de que produto é não é motivo para deixar de olhar o vitalício — e o
+      caminho cauteloso, por ser filtrado por pedido_id, não revoga nada que
+      não seja daquele pedido.
+      ===========================================================================
+    */
+    const podeSerVitalicio =
+      ehProdutoPrincipal(item.produtoId) || produtoDoPagamento(item.produtoId) === null
+
+    if (podeSerVitalicio) {
+      const r = await revogarVitalicio(admin, item, tipo)
+      notas.push(r.nota)
+      if (!r.ok) processado = false
+    }
+
+    const modulos = await revogarModulos(admin, item, tipo)
+    notas.push(modulos.nota)
+    if (!modulos.ok) processado = false
+
+    linhas.push({ pedidoId: item.pedidoId, processado, nota: notas.join(' · ') })
+  }
+
+  return linhas
+}
+
+async function revogarVitalicio(admin: Admin, item: ItemCakto, tipo: string) {
   /*
     ===========================================================================
     A RESERVA POR E-MAIL SÓ VALE PARA LIBERAÇÃO MANUAL.
@@ -318,15 +468,12 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
     A reserva existe para cobrir liberação criada à mão — as do fundador, com
     pedido_id 'manual-fundador' — que nunca teriam pedido para casar. Por isso
     ela só vale quando a liberação NÃO veio de compra.
-
-    Reembolso de pedido desconhecido contra liberação originada de compra:
-    registra, não revoga, e fica com nota para revisão.
     ===========================================================================
   */
   const { data: porPedido } = await admin
     .from('liberacoes')
     .select('id')
-    .eq('pedido_id', pedido.id)
+    .eq('pedido_id', item.pedidoId)
     .maybeSingle()
 
   let alvo = porPedido
@@ -336,7 +483,7 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
     const { data: porEmail } = await admin
       .from('liberacoes')
       .select('id, pedido_id')
-      .eq('email', pedido.email)
+      .eq('email', item.email)
       .maybeSingle()
 
     if (porEmail && !porEmail.pedido_id) {
@@ -344,9 +491,8 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
       casouPor = 'e-mail (liberação manual, sem pedido)'
     } else if (porEmail) {
       return {
-        processado: false,
-        nota: `${tipo} do pedido ${pedido.id} não casa com a liberação de ${pedido.email}, que veio da compra ${porEmail.pedido_id} — NÃO revogado, revisar à mão`,
-        pedidoId: pedido.id,
+        ok: false,
+        nota: `${tipo} do pedido ${item.pedidoId} não casa com a liberação de ${item.email}, que veio da compra ${porEmail.pedido_id} — vitalício NÃO revogado, revisar à mão`,
       }
     }
   }
@@ -356,8 +502,7 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
       ===========================================================================
       REVOGAÇÃO SEM ALVO NÃO É CASO RESOLVIDO. É CASO PARA OLHAR.
       ===========================================================================
-      Terceira decisão desta fase que parece candidata a "simplificar" depois.
-      Não simplifique: `processado: true` aqui faria isto sumir da revisão.
+      `processado: true` aqui faria isto sumir da revisão.
 
       Um reembolso ou contestação de pedido que o sistema NUNCA VIU significa
       uma de três coisas, e nenhuma é boa:
@@ -367,19 +512,15 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
         - um purchase_approved que se perdeu — entrega falhada, payload
           incompleto, janela em que o webhook estava fora.
 
-      É verdade que existe um caso legítimo: entrega fora de ordem, com a
-      contestação chegando antes da compra. Foi o que aconteceu no disparo de
-      teste. Mas a assimetria manda de novo — revisar um caso legítimo custa
-      um olhar; não ver uma contestação real custa dinheiro e não avisa
-      ninguém.
-
-      Fica registrado, não processado, e aparece na revisão.
+      Existe um caso legítimo: entrega fora de ordem, com a contestação
+      chegando antes da compra. Mas a assimetria manda de novo — revisar um
+      caso legítimo custa um olhar; não ver uma contestação real custa dinheiro
+      e não avisa ninguém.
       ===========================================================================
     */
     return {
-      processado: false,
-      nota: `${tipo} sem liberação correspondente (pedido ${pedido.id}) — nada a revogar, mas contestação de pedido desconhecido merece revisão`,
-      pedidoId: pedido.id,
+      ok: false,
+      nota: `${tipo} sem liberação correspondente (pedido ${item.pedidoId}) — nada a revogar no vitalício, mas contestação de pedido desconhecido merece revisão`,
     }
   }
 
@@ -392,29 +533,23 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
     })
     .eq('id', alvo.id)
 
-  if (error) throw new Error(`não consegui revogar ${pedido.email}: ${error.message}`)
+  if (error) throw new Error(`não consegui revogar ${item.email}: ${error.message}`)
 
-  const recursos = await revogarRecursos(admin, pedido, tipo)
-
-  return {
-    processado: true,
-    nota: `revogado por ${tipo} (casou por ${casouPor}) · ${recursos}`,
-    pedidoId: pedido.id,
-  }
+  return { ok: true, nota: `vitalício revogado por ${tipo} (casou por ${casouPor})` }
 }
 
 /**
- * Revoga SÓ os recursos daquele pedido.
+ * Revoga SÓ os módulos daquele pedido.
  *
  * ===========================================================================
  * O FILTRO É O pedido_id, E ISSO NÃO É DETALHE
  * ===========================================================================
- * Quem comprou o bump e depois um upsell tem recursos de dois pedidos. Pedir
- * reembolso do upsell não pode tirar o bump — e não tira, porque o `.eq` é
- * pelo pedido, não pelo e-mail nem pelo catálogo.
+ * Quem comprou três bumps tem recursos de três pedidos diferentes, todos no
+ * mesmo checkout. Pedir reembolso de um não pode tirar os outros dois — e não
+ * tira, porque o `.eq` é pelo pedido, não pelo e-mail nem pelo catálogo.
  *
  * O vitalício de R$ 47 está fora por construção: mora em `liberacoes`, outra
- * tabela, e é revogado só quando o reembolso é do pedido DELE.
+ * tabela, carimbado com o pedido do item principal.
  *
  * Repare no que NÃO acontece aqui: nada é apagado. O status vira 'revogada' e
  * a linha fica. O que o recurso já produziu — textos no orçamento, contrato
@@ -424,7 +559,7 @@ async function revogar(admin: Admin, pedido: Pedido, tipo: string): Promise<Resu
  * mandou para o cliente dele.
  * ===========================================================================
  */
-async function revogarRecursos(admin: Admin, pedido: Pedido, tipo: string) {
+async function revogarModulos(admin: Admin, item: ItemCakto, tipo: string) {
   const { data, error } = await admin
     .from('recursos_liberados')
     .update({
@@ -432,13 +567,71 @@ async function revogarRecursos(admin: Admin, pedido: Pedido, tipo: string) {
       revogada_em: new Date().toISOString(),
       motivo_revogacao: tipo,
     })
-    .eq('pedido_id', pedido.id)
+    .eq('pedido_id', item.pedidoId)
     .eq('status', 'ativa')
     .select('recurso')
 
-  if (error) return `FALHOU ao revogar recursos: ${error.message}`
-  if (!data?.length) return 'nenhum recurso vinculado a este pedido'
-  return `recursos revogados: ${data.map((r) => r.recurso).join(', ')}`
+  if (error) return { ok: false, nota: `FALHOU ao revogar módulos: ${error.message}` }
+  if (data?.length) return { ok: true, nota: `módulos revogados: ${data.map((r) => r.recurso).join(', ')}` }
+
+  const produto = produtoDoPagamento(item.produtoId)
+
+  /*
+    Zero linhas revogadas para um produto que o mapa diz vender módulos é
+    anomalia, não rotina: alguém pagou por um módulo, pediu o dinheiro de
+    volta, e o módulo nunca chegou a ser concedido. Quase sempre é o
+    purchase_approved que se perdeu — e é justamente o caso em que eu quero
+    olhar, porque significa que existiu um comprador sem acesso.
+  */
+  if (produto && produto.recursos.length > 0) {
+    return {
+      ok: false,
+      nota: `${tipo} de ${produto.apelido} (pedido ${item.pedidoId}) mas nenhum módulo ativo estava vinculado a ele — o purchase_approved pode ter se perdido, revisar à mão`,
+    }
+  }
+
+  return { ok: true, nota: 'nenhum módulo vinculado a este pedido' }
+}
+
+
+// ===========================================================================
+// CONSULTAS DE APOIO
+// ===========================================================================
+
+/**
+ * Este par (evento, pedido) já foi processado?
+ *
+ * A Cakto retenta até 5 vezes e não manda id de entrega em cabeçalho
+ * (conferido: só user-agent CaktoBot/1.0 e traceparent). Os ids da Vercel
+ * identificam a invocação, não o evento — numa retentativa viriam diferentes.
+ *
+ * A chave é o par (tipo do evento, id do PEDIDO), e é por isso que o log
+ * precisou virar uma linha por item: com uma linha por evento, a retentativa
+ * de um checkout com bumps não teria como dizer quais dos quatro pedidos já
+ * tinham sido tratados.
+ */
+async function jaProcessado(admin: Admin, tipo: string, pedidoId: string) {
+  const { data } = await admin
+    .from('eventos_cakto')
+    .select('id')
+    .eq('tipo', tipo)
+    .eq('pedido_id', pedidoId)
+    .eq('processado', true)
+    .limit(1)
+
+  return Boolean(data && data.length > 0)
+}
+
+/** O tipo da revogação já registrada para este pedido, se houver. */
+async function revogacaoRegistrada(admin: Admin, pedidoId: string) {
+  const { data } = await admin
+    .from('eventos_cakto')
+    .select('tipo')
+    .eq('pedido_id', pedidoId)
+    .in('tipo', ['refund', 'chargeback'])
+    .limit(1)
+
+  return data && data.length > 0 ? data[0].tipo : null
 }
 
 /** Procura a conta pelo e-mail. Nulo quando ela ainda não existe. */
