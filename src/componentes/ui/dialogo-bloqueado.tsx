@@ -1,6 +1,7 @@
 'use client'
 
 import { Dialogo } from '@/componentes/ui/dialogo'
+import { OfertaRecurso } from '@/componentes/ui/oferta-recurso'
 
 /**
  * O que este recurso faz, para quem ainda não o tem.
@@ -54,41 +55,7 @@ export function DialogoBloqueado({
       <div className="flex flex-col gap-4">
         <p className="text-sm leading-relaxed text-tinta-leitura">{oQueFaz}</p>
 
-        {checkout ? (
-          <>
-            {/*
-              Âncora de verdade, sem target="_blank": mesma regra dos links de
-              WhatsApp. E o e-mail já vai no link — ver checkoutDoRecurso.
-            */}
-            <a
-              href={checkout}
-              rel="noopener"
-              className="fo-toque flex min-h-13 items-center justify-center rounded-xl bg-marca text-base font-semibold text-white"
-            >
-              Ver como liberar
-            </a>
-            <p className="text-center text-xs leading-relaxed text-tinta-meta">
-              O checkout abre com o e-mail desta conta preenchido. Comprar com outro e-mail deixa o
-              recurso sem chegar aqui.
-            </p>
-          </>
-        ) : (
-          /*
-            O galho que ninguém deveria ver.
-
-            Enquanto os três order bumps estavam sem link no catálogo, era ELE
-            que aparecia no cadeado da IA — dizendo "em breve" sobre um produto
-            que estava à venda o tempo todo. Não sumiu porque continua sendo a
-            saída certa para recurso sem produto: melhor um aviso honesto do
-            que um botão que não leva a lugar nenhum.
-
-            Se ele reaparecer no cadeado da IA, o defeito é no catálogo:
-            `linkCheckout` vazio em lib/cakto/produtos.ts.
-          */
-          <p className="rounded-lg bg-fundo px-3 py-2.5 text-sm text-tinta-meta">
-            Ainda não está à venda. Em breve.
-          </p>
-        )}
+        <OfertaRecurso checkout={checkout} />
 
         <button
           type="button"

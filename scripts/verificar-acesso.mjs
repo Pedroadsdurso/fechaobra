@@ -488,24 +488,41 @@ async function principal() {
       const rAtaque = await chamarAcao(alvo, contas.soVitalicio.cookie, acao.corpo)
       const corpoAtaque = await rAtaque.text()
 
+      /*
+        RECUSA CONTROLADA, NÃO 500.
+
+        Isto já foi `status >= 400`, e a mudança é o ponto. A ação devolve
+        `{ ok:false, erro:'sem_recurso' }` com HTTP 200: recusa prevista não é
+        erro de servidor, e um 500 aqui enche o painel de erros de ruído até
+        ninguém mais olhar — que é quando o 500 de verdade passa batido.
+
+        Afirmar `200` E o corpo, e não só um dos dois: 200 sozinho ficaria
+        verde se a guarda sumisse e a IA respondesse normalmente, que é
+        exatamente o defeito que este bloco existe para pegar.
+      */
       conferir(
         `  ATAQUE: ${acao.nome} recusa a conta sem ${acao.recurso}`,
-        rAtaque.status >= 400,
-        `http=${rAtaque.status}`,
+        rAtaque.status === 200 && corpoAtaque.includes('sem_recurso'),
+        `http=${rAtaque.status}, corpo traz "sem_recurso" — recusa, não 500`,
+      )
+      conferir(
+        `  a recusa diz qual módulo falta`,
+        corpoAtaque.includes(acao.recurso),
+        `resposta nomeia "${acao.recurso}" — é o que o front usa para ofertar o certo`,
       )
 
       /*
         AFIRME SOBRE O MECANISMO.
 
-        "http >= 400" sozinho não diz QUEM barrou. Mas `exigirRecurso` é a
-        PRIMEIRA linha da ação, antes da validação de entrada — então a conta
-        sem o módulo não pode ter chegado à frase de validação. Se ela
-        aparecer aqui, a guarda rodou depois da validação, ou não rodou.
+        `sem_recurso` no corpo já diz muito, mas não diz QUANDO a guarda
+        rodou. O corpo inteiro da ação é o argumento de `comRecurso`, então a
+        conta sem o módulo não pode ter chegado à validação de entrada. Se a
+        frase aparecer aqui, o corpo rodou fora da guarda.
       */
       conferir(
         `  parou na guarda, antes de validar a entrada`,
         !corpoAtaque.includes(acao.frase),
-        `resposta não contém "${acao.frase}" — exigirRecurso é a primeira linha`,
+        `resposta não contém "${acao.frase}" — o corpo roda dentro de comRecurso`,
       )
 
       /*
@@ -523,10 +540,19 @@ async function principal() {
       })
       const rDepois = await chamarAcao(alvo, contas.soVitalicio.cookie, acao.corpo)
       const corpoDepois = await rDepois.text()
+      /*
+        Com a recusa virando 200, o status deixou de distinguir os dois casos —
+        e é o corpo que distingue: antes trazia `sem_recurso` e nenhuma frase de
+        validação; agora traz a frase e nenhum `sem_recurso`. As duas metades
+        são afirmadas, senão a prova ficaria verde para uma resposta que fosse
+        as duas coisas ao mesmo tempo.
+      */
       conferir(
         `  PROVA: a MESMA chamada passa depois de liberar ${acao.recurso}`,
-        rDepois.status < 400 && corpoDepois.includes(acao.frase),
-        `http=${rDepois.status}, agora chega à validação — só o módulo mudou`,
+        rDepois.status === 200 &&
+          corpoDepois.includes(acao.frase) &&
+          !corpoDepois.includes('sem_recurso'),
+        `http=${rDepois.status}, agora chega à validação e não recusa — só o módulo mudou`,
       )
     }
   } finally {

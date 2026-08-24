@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { OfertaRecurso } from '@/componentes/ui/oferta-recurso'
 
 import { Dialogo } from '@/componentes/ui/dialogo'
 
@@ -47,14 +48,27 @@ export function DialogoTextosIa({
   aoFechar,
   rascunho,
   aoAplicar,
+  checkout,
 }: {
   aberto: boolean
   aoFechar: () => void
   rascunho: RascunhoOrcamento
   aoAplicar: (mudancas: Partial<Record<Chave, string>>) => void
+  /** Para a oferta quando o módulo cair no meio do caminho. */
+  checkout: string
 }) {
   const [gerando, setGerando] = useState(false)
   const [erro, setErro] = useState('')
+  /*
+    O módulo sumiu no meio do caminho.
+
+    Esta folha só é montada para quem TEM o recurso — ver o `{temIa… &&` em
+    editor-orcamento.tsx —, então chegar aqui significa que a liberação caiu
+    depois que a página abriu: reembolso do bump processado pelo webhook
+    enquanto o orçamento estava na tela. É raro e é real, e a saída certa é
+    a oferta, não "não consegui gerar agora".
+  */
+  const [semRecurso, setSemRecurso] = useState(false)
   const [textos, setTextos] = useState<Record<string, string> | null>(null)
   const [ligados, setLigados] = useState<Set<Chave>>(new Set())
 
@@ -68,6 +82,7 @@ export function DialogoTextosIa({
 
   async function gerar() {
     setErro('')
+    setSemRecurso(false)
     setGerando(true)
     try {
       const r = await gerarTextosDoOrcamento({
@@ -76,6 +91,11 @@ export function DialogoTextosIa({
         itens: itensComDescricao.map((i) => ({ descricao: i.descricao })),
       })
       if (!r.ok) {
+        // Recusa prevista, não falha: o servidor devolve isto em vez de 500.
+        if ('erro' in r && r.erro === 'sem_recurso') {
+          setSemRecurso(true)
+          return
+        }
         setErro(r.mensagem)
         return
       }
@@ -129,6 +149,14 @@ export function DialogoTextosIa({
 
           {erro && <p className="text-sm font-medium text-perigo">{erro}</p>}
 
+          {semRecurso ? (
+            <>
+              <p className="text-sm leading-relaxed text-tinta-leitura">
+                Este recurso não está mais liberado para esta conta.
+              </p>
+              <OfertaRecurso checkout={checkout} />
+            </>
+          ) : (
           <button
             type="button"
             onClick={gerar}
@@ -137,6 +165,7 @@ export function DialogoTextosIa({
           >
             {gerando ? 'Escrevendo…' : 'Escrever'}
           </button>
+          )}
         </div>
       )}
 

@@ -659,6 +659,7 @@ export function EditorOrcamento({
             toque abre a explicação, e a ferramenta nunca chega a ser montada. */}
         {temIaTextos && (
           <DialogoTextosIa
+            checkout={checkoutIaTextos}
             aberto={textosIaAberto}
             aoFechar={() => setTextosIaAberto(false)}
             rascunho={rascunho}
@@ -668,6 +669,7 @@ export function EditorOrcamento({
 
         {temIaOrcamento && (
           <DialogoDescrever
+            checkout={checkoutIaOrcamento}
             aberto={descreverAberto}
             aoFechar={() => setDescreverAberto(false)}
             tipoServico={rascunho.tipoServico}

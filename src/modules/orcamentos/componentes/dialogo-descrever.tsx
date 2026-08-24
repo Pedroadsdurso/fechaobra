@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { OfertaRecurso } from '@/componentes/ui/oferta-recurso'
 
 import { Dialogo } from '@/componentes/ui/dialogo'
 import { LIMITE_DESCRICAO } from '@/modules/ia/saneamento'
@@ -36,15 +37,28 @@ export function DialogoDescrever({
   aoFechar,
   tipoServico,
   aoAdicionar,
+  checkout,
 }: {
   aberto: boolean
   aoFechar: () => void
   tipoServico: string
   aoAdicionar: (itens: ItemEditor[]) => void
+  /** Para a oferta quando o módulo cair no meio do caminho. */
+  checkout: string
 }) {
   const [texto, setTexto] = useState('')
   const [gerando, setGerando] = useState(false)
   const [erro, setErro] = useState('')
+  /*
+    O módulo sumiu no meio do caminho.
+
+    Esta folha só é montada para quem TEM o recurso — ver o `{temIa… &&` em
+    editor-orcamento.tsx —, então chegar aqui significa que a liberação caiu
+    depois que a página abriu: reembolso do bump processado pelo webhook
+    enquanto o orçamento estava na tela. É raro e é real, e a saída certa é
+    a oferta, não "não consegui gerar agora".
+  */
+  const [semRecurso, setSemRecurso] = useState(false)
   const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null)
   const [fora, setFora] = useState<Set<number>>(new Set())
 
@@ -59,10 +73,16 @@ export function DialogoDescrever({
 
   async function gerar() {
     setErro('')
+    setSemRecurso(false)
     setGerando(true)
     try {
       const resposta = await extrairItensDoTexto({ tipoServico, descricao: texto })
       if (!resposta.ok) {
+        // Recusa prevista, não falha: o servidor devolve isto em vez de 500.
+        if ('erro' in resposta && resposta.erro === 'sem_recurso') {
+          setSemRecurso(true)
+          return
+        }
         setErro(resposta.mensagem)
         return
       }
@@ -138,6 +158,14 @@ export function DialogoDescrever({
 
           {erro && <p className="text-sm font-medium text-perigo">{erro}</p>}
 
+          {semRecurso ? (
+            <>
+              <p className="text-sm leading-relaxed text-tinta-leitura">
+                Este recurso não está mais liberado para esta conta.
+              </p>
+              <OfertaRecurso checkout={checkout} />
+            </>
+          ) : (
           <button
             type="button"
             onClick={gerar}
@@ -146,6 +174,7 @@ export function DialogoDescrever({
           >
             {gerando ? 'Separando…' : 'Separar em itens'}
           </button>
+          )}
         </div>
       )}
 

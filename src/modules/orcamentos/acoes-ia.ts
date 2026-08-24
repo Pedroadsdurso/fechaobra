@@ -1,6 +1,6 @@
 'use server'
 
-import { exigirRecurso } from '@/modules/acesso/recursos'
+import { comRecurso, type RespostaSemRecurso } from '@/modules/acesso/recursos'
 import { extrairItens, LIMITE_DESCRICAO, type ItemExtraido } from '@/modules/ia/extrair-itens'
 import { gerarTextos, type TextosGerados } from '@/modules/ia/gerar-textos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
@@ -10,15 +10,19 @@ import { carregarTextosPadrao } from './consultas'
 /**
  * As ações de IA do editor.
  *
- * Arquivo separado de `acoes.ts` de propósito: aqui toda ação passa por
- * `exigirRecurso`, não só por `exigirAcesso`. Misturar as duas famílias no
+ * Arquivo separado de `acoes.ts` de propósito: aqui todo corpo roda DENTRO de
+ * `comRecurso`, não só atrás de `exigirAcesso`. Misturar as duas famílias no
  * mesmo arquivo é como uma ação nova acaba nascendo com a guarda errada —
- * quem copia a função de cima copia a primeira linha dela.
+ * quem copia a função de cima copia o formato dela.
+ *
+ * As duas devolvem `RespostaSemRecurso` quando o módulo falta, em vez de
+ * lançar: recusa prevista não é 500. Ver o bloco em modules/acesso/recursos.ts.
  */
 
 export type ResultadoExtracao =
   | { ok: true; itens: ItemExtraido[]; restantes: number }
   | { ok: false; mensagem: string; espereMs?: number }
+  | RespostaSemRecurso
 
 /**
  * Texto corrido do prestador -> linhas de orçamento.
@@ -35,37 +39,38 @@ export async function extrairItensDoTexto(entrada: {
   tipoServico: string
   descricao: string
 }): Promise<ResultadoExtracao> {
-  await exigirRecurso('ia_orcamento')
+  return comRecurso('ia_orcamento', async () => {
+    const supabase = await criarClienteServidor()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { ok: false, mensagem: 'Sessão expirada. Entre de novo.' }
 
-  const supabase = await criarClienteServidor()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, mensagem: 'Sessão expirada. Entre de novo.' }
+    const descricao = (entrada.descricao ?? '').trim()
+    if (descricao.length < 10) {
+      return { ok: false, mensagem: 'Escreva um pouco mais sobre o serviço.' }
+    }
 
-  const descricao = (entrada.descricao ?? '').trim()
-  if (descricao.length < 10) {
-    return { ok: false, mensagem: 'Escreva um pouco mais sobre o serviço.' }
-  }
+    const resultado = await extrairItens({
+      userId: user.id,
+      tipoServico: entrada.tipoServico ?? '',
+      // O corte também acontece no saneamento; aqui é para a mensagem de erro
+      // poder ser específica se um dia passar a existir.
+      descricao: descricao.slice(0, LIMITE_DESCRICAO),
+    })
 
-  const resultado = await extrairItens({
-    userId: user.id,
-    tipoServico: entrada.tipoServico ?? '',
-    // O corte também acontece no saneamento; aqui é para a mensagem de erro
-    // poder ser específica se um dia passar a existir.
-    descricao: descricao.slice(0, LIMITE_DESCRICAO),
+    if (!resultado.ok) {
+      return { ok: false, mensagem: resultado.mensagem, espereMs: resultado.espereMs }
+    }
+
+    return { ok: true, itens: resultado.dados, restantes: resultado.saldo.restantes - 1 }
   })
-
-  if (!resultado.ok) {
-    return { ok: false, mensagem: resultado.mensagem, espereMs: resultado.espereMs }
-  }
-
-  return { ok: true, itens: resultado.dados, restantes: resultado.saldo.restantes - 1 }
 }
 
 export type ResultadoTextos =
   | { ok: true; textos: TextosGerados; restantes: number }
   | { ok: false; mensagem: string; espereMs?: number }
+  | RespostaSemRecurso
 
 /**
  * Os quatro textos que sustentam o preço, a partir do que o orçamento já tem.
@@ -84,38 +89,38 @@ export async function gerarTextosDoOrcamento(entrada: {
   titulo: string
   itens: { descricao: string }[]
 }): Promise<ResultadoTextos> {
-  await exigirRecurso('ia_textos')
+  return comRecurso('ia_textos', async () => {
+    const supabase = await criarClienteServidor()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { ok: false, mensagem: 'Sessão expirada. Entre de novo.' }
 
-  const supabase = await criarClienteServidor()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, mensagem: 'Sessão expirada. Entre de novo.' }
+    const itens = (entrada.itens ?? []).filter((i) => i?.descricao?.trim())
+    if (itens.length === 0) {
+      return { ok: false, mensagem: 'Inclua ao menos um item antes de gerar os textos.' }
+    }
 
-  const itens = (entrada.itens ?? []).filter((i) => i?.descricao?.trim())
-  if (itens.length === 0) {
-    return { ok: false, mensagem: 'Inclua ao menos um item antes de gerar os textos.' }
-  }
+    /*
+      O prazo de garantia sai daqui, do seed do tipo de serviço — 5 anos em
+      impermeabilização, 3 em marcenaria, 2 em telhado. É o que dá ao modelo de
+      onde tirar número em vez de inventar, e é contra este texto que os prazos
+      do resultado são conferidos. Sem ele, nenhum período passa.
+    */
+    const padrao = await carregarTextosPadrao(entrada.tipoServico ?? '')
 
-  /*
-    O prazo de garantia sai daqui, do seed do tipo de serviço — 5 anos em
-    impermeabilização, 3 em marcenaria, 2 em telhado. É o que dá ao modelo de
-    onde tirar número em vez de inventar, e é contra este texto que os prazos
-    do resultado são conferidos. Sem ele, nenhum período passa.
-  */
-  const padrao = await carregarTextosPadrao(entrada.tipoServico ?? '')
+    const resultado = await gerarTextos({
+      userId: user.id,
+      tipoServico: entrada.tipoServico ?? '',
+      titulo: entrada.titulo ?? '',
+      itens,
+      garantiaPadrao: padrao?.garantia ?? '',
+    })
 
-  const resultado = await gerarTextos({
-    userId: user.id,
-    tipoServico: entrada.tipoServico ?? '',
-    titulo: entrada.titulo ?? '',
-    itens,
-    garantiaPadrao: padrao?.garantia ?? '',
+    if (!resultado.ok) {
+      return { ok: false, mensagem: resultado.mensagem, espereMs: resultado.espereMs }
+    }
+
+    return { ok: true, textos: resultado.dados, restantes: resultado.saldo.restantes - 1 }
   })
-
-  if (!resultado.ok) {
-    return { ok: false, mensagem: resultado.mensagem, espereMs: resultado.espereMs }
-  }
-
-  return { ok: true, textos: resultado.dados, restantes: resultado.saldo.restantes - 1 }
 }

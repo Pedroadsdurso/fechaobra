@@ -62,11 +62,41 @@ export type Recurso =
   | 'perfil_publico'
   | 'relatorio_mensal'
 
-export class SemRecurso extends Error {
-  constructor(public recurso: Recurso) {
-    super(`Esta conta não tem o recurso "${recurso}" liberado.`)
-    this.name = 'SemRecurso'
-  }
+/**
+ * A resposta de "esta conta não tem o módulo".
+ *
+ * ===========================================================================
+ * RECUSA NÃO É ERRO DE SERVIDOR
+ * ===========================================================================
+ * Isto já foi uma exceção (`class SemRecurso extends Error`) que subia até a
+ * fronteira da Server Action e virava HTTP 500. Funcionava como tranca, e era
+ * errado em duas frentes:
+ *
+ * 1. NO LOG. 500 é "o servidor quebrou" — a linha que acorda alguém. Uma conta
+ *    sem o bump de IA tocando num botão não é defeito nosso; é o produto
+ *    funcionando. Misturar as duas coisas faz o painel de erros encher de
+ *    ruído até ninguém mais olhar, e é aí que o 500 de verdade passa batido.
+ *
+ * 2. NA TELA. Exceção chega ao cliente como falha genérica, sem dizer o que
+ *    houve. O front mostrava "Não consegui gerar agora", que soa como
+ *    instabilidade — a pessoa tenta de novo, dá o mesmo, e ela conclui que o
+ *    app está quebrado. A resposta certa é a oferta: falta o módulo, olha aqui
+ *    onde compra.
+ *
+ * O que NÃO mudou: a decisão continua no servidor e continua fechada por
+ * padrão. Isto é uma recusa explícita, não um afrouxamento.
+ * ===========================================================================
+ */
+export type RespostaSemRecurso = {
+  ok: false
+  erro: 'sem_recurso'
+  recurso: Recurso
+  /**
+   * Existe para o front que ainda só sabe mostrar `mensagem` não ficar com
+   * `undefined` na tela. Quem trata `erro === 'sem_recurso'` mostra a oferta e
+   * ignora este campo.
+   */
+  mensagem: string
 }
 
 /**
@@ -100,17 +130,53 @@ export async function temRecurso(recurso: Recurso) {
 }
 
 /**
- * A tranca das Server Actions de recurso extra.
+ * A tranca das Server Actions de módulo extra.
  *
- * Mesma postura de `exigirAcesso`: lança, no primeiro comando, antes de tocar
- * em qualquer coisa. Quem chega aqui sem o recurso montou a requisição na mão,
- * porque a interface não oferece o botão.
+ * ===========================================================================
+ * ENVOLVE O CORPO EM VEZ DE SÓ CHECAR ANTES DELE
+ * ===========================================================================
+ * A forma natural depois de parar de lançar seria:
  *
- * A ORDEM IMPORTA. `exigirAcesso()` vem primeiro para que quem não comprou
- * receba `SemAcesso` — a tela de compra — e não `SemRecurso`, que mandaria a
- * pessoa procurar um botão de ativar recurso que não existe para ela.
+ *     const bloqueio = await checarRecurso('ia_textos')
+ *     if (bloqueio) return bloqueio
+ *     ...corpo...
+ *
+ * E ela tem um buraco que a versão que lançava não tinha: dá para escrever a
+ * primeira linha e esquecer a segunda. O corpo roda, a IA responde, e nada
+ * acusa — o teste de quem tem o módulo passa, porque para ele o resultado é
+ * idêntico. Só falha para quem não pagou, que é justamente quem não vai abrir
+ * um chamado dizendo "recebi de graça".
+ *
+ * Envolvendo, não há como o corpo rodar sem a checagem: ele É o argumento.
+ * Esquecer o `comRecurso` não compila contra o tipo de retorno da ação, que
+ * inclui `RespostaSemRecurso`.
+ *
+ * A ORDEM IMPORTA. `exigirAcesso()` vem primeiro, e continua LANÇANDO: quem
+ * não comprou o FechaObra tem que receber `SemAcesso` — que a tela transforma
+ * na página de compra do produto — e não a oferta de um módulo solto, que
+ * mandaria a pessoa comprar o acessório sem ter o principal.
+ * ===========================================================================
  */
-export async function exigirRecurso(recurso: Recurso) {
+export async function comRecurso<T>(
+  recurso: Recurso,
+  corpo: () => Promise<T>,
+): Promise<T | RespostaSemRecurso> {
   await exigirAcesso()
-  if (!(await temRecurso(recurso))) throw new SemRecurso(recurso)
+
+  /*
+    `temRecurso` é fechado por padrão em todos os caminhos: sem sessão, erro de
+    consulta e lista vazia produzem todos um Set vazio, e `.has()` num Set
+    vazio é false. Não há default liberado para nenhum recurso, conhecido ou
+    não — nunca inverta esta condição para "se não sei, deixa passar".
+  */
+  if (!(await temRecurso(recurso))) {
+    return {
+      ok: false,
+      erro: 'sem_recurso',
+      recurso,
+      mensagem: 'Esta conta não tem este recurso liberado.',
+    }
+  }
+
+  return corpo()
 }
