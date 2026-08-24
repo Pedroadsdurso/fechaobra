@@ -213,6 +213,34 @@ async function irPara(cdp, url) {
   await new Promise((r) => setTimeout(r, 2500))
 }
 
+/**
+ * Dispara algo que NAVEGA a página, sem esperar a resposta.
+ *
+ * `avaliar` usa awaitPromise: o navegador nunca devolve o resultado de uma
+ * expressão cuja execução acaba num document novo, e a chamada CDP fica
+ * pendurada para sempre. Foi assim que a primeira versão desta rodada travou o
+ * teste por dez minutos em vez de falhar.
+ */
+async function disparar(cdp, expressao) {
+  await cdp('Runtime.evaluate', { expression: expressao, awaitPromise: false }).catch(() => null)
+}
+
+/** Espera a rota mudar, contando do lado de fora da página. */
+async function esperarRota(cdp, regex, ms = 20000) {
+  const fim = Date.now() + ms
+  while (Date.now() < fim) {
+    await new Promise((r) => setTimeout(r, 300))
+    const rota = await cdp('Runtime.evaluate', {
+      expression: 'location.pathname',
+      returnByValue: true,
+    })
+      .then((r) => r.result?.value)
+      .catch(() => null)
+    if (rota && regex.test(rota)) return rota
+  }
+  return null
+}
+
 function adminSupabase() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -242,10 +270,7 @@ async function limpar() {
     (o nome é `orcamento_itens`). Não quebrou nada porque a cascata já fazia
     o trabalho, mas era código errado que parecia estar cuidando de algo.
   */
-  const { error: erroOrcamentos } = await admin
-    .from('orcamentos')
-    .delete()
-    .eq('user_id', conta.id)
+  const { error: erroOrcamentos } = await admin.from('orcamentos').delete().eq('user_id', conta.id)
   const { error: erroClientes } = await admin.from('clientes').delete().eq('user_id', conta.id)
   const { error: erroConta } = await admin.auth.admin.deleteUser(conta.id)
 
@@ -270,6 +295,26 @@ async function principal() {
     '--no-first-run',
     '--disable-extensions',
     '--window-size=1280,900',
+    /*
+      SEM ESTAS TRÊS FLAGS, O TESTE MENTE.
+
+      Medido: depois de uma troca de sessão, o Chrome headless passa a tratar
+      a aba como oculta — `document.visibilityState` vira 'hidden'. O
+      scheduler do React adia trabalho não urgente em página oculta, e a
+      hidratação simplesmente não acontece. O sintoma é idêntico ao do defeito
+      que este script existe para caçar: HTML certo, JS baixado, clique morto.
+
+      A prova é causal: mesma sequência, mesma máquina, mudando SÓ as flags —
+      sem elas visibilityState=hidden e a página não hidrata; com elas
+      visibilityState=visible e hidrata em ~300ms. Em Chrome com janela, os
+      mesmos passos hidratam sempre, com ou sem flag.
+
+      Isto não afrouxa nada: só impede o navegador de desligar a aba que
+      estamos medindo.
+    */
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-background-timer-throttling',
     'about:blank',
   ])
   chrome.on('error', (e) => {
@@ -384,6 +429,68 @@ async function principal() {
 
       console.log(`  ${r.ok ? 'ok  ' : 'FALHA'} ${caminho.padEnd(38)} ${r.detalhe}`)
       if (!r.ok) falhas.push({ caminho, detalhe: r.detalhe })
+    }
+
+    /*
+      ================================================================
+      A RODADA DA SEGUNDA SESSÃO
+      ================================================================
+      Tudo acima roda numa sessão só, recém-aberta. É o caminho feliz e não
+      cobre o que o usuário faz de verdade: sair da conta e entrar de novo,
+      ou trocar de conta, no mesmo navegador.
+
+      Esse cenário chegou a parecer quebrado numa investigação — e era o
+      instrumento (ver o bloco das flags acima). Mas a lição fica: se um dia
+      quebrar de verdade, o editor fica morto e a pessoa acha que o app
+      acabou. As rodadas acima não pegariam, porque cada uma nasce num
+      navegador novo.
+
+      Sai pelo MESMO botão que o usuário usa — um form POST para /auth/sair —
+      e entra de novo pela tela de login, no mesmo Chrome, com o mesmo perfil.
+      ================================================================
+    */
+    if (href) {
+      /*
+        O MESMO botão do usuário: um form POST para /auth/sair, que responde
+        303 para /entrar. É navegação de documento, então vai por `disparar`.
+      */
+      await disparar(cdp, `document.querySelector('[aria-label="Sair da conta"]')?.click()`)
+      const saiu = await esperarRota(cdp, /^\/entrar/)
+
+      if (!saiu) {
+        falhas.push({ caminho: 'sair da conta', detalhe: 'o botão de sair não levou a /entrar' })
+      } else {
+        await irPara(cdp, `${BASE}/entrar`)
+        await avaliar(cdp, AJUDANTES)
+        await disparar(
+          cdp,
+          `(() => {
+            const i = [...document.querySelectorAll('input')];
+            digitar(i.find(e => e.name === 'email'), ${JSON.stringify(EMAIL)});
+            digitar(i.find(e => e.name === 'senha'), ${JSON.stringify(SENHA)});
+            i[0].form.requestSubmit();
+          })()`,
+        )
+        const voltou = await esperarRota(cdp, /^\/painel/)
+        if (!voltou) {
+          falhas.push({
+            caminho: 'entrar de novo',
+            detalhe: 'o login na segunda sessão não completou',
+          })
+        }
+      }
+
+      await irPara(cdp, `${BASE}${href}`)
+      await avaliar(cdp, AJUDANTES)
+      let r2
+      try {
+        r2 = await avaliar(cdp, ROTAS[ROTAS.length - 1].prova)
+      } catch (e) {
+        r2 = { ok: false, detalhe: 'a prova lançou: ' + e.message.split('\n')[0] }
+      }
+      const rotulo = 'editor após sair e entrar de novo'
+      console.log(`  ${r2.ok ? 'ok  ' : 'FALHA'} ${rotulo.padEnd(38)} ${r2.detalhe}`)
+      if (!r2.ok) falhas.push({ caminho: rotulo, detalhe: r2.detalhe })
     }
   } finally {
     ws.close()

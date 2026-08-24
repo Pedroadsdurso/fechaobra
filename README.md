@@ -267,6 +267,38 @@ valor** — não existe a casa onde a regra seria desobedecida, e o item chega n
 editor com `valorUnitario` vazio. Quem acrescentar `valorUnitario` ao schema
 "para adiantar" estará desfazendo a única garantia real que existe ali.
 
+### Página oculta não hidrata — e é armadilha de teste, não do produto
+
+**O scheduler do React adia trabalho não urgente enquanto `document.visibilityState`
+é `'hidden'`, e a hidratação é trabalho não urgente.** Em Chrome headless a aba
+pode ser tratada como oculta depois de uma troca de sessão — e aí o sintoma é
+idêntico ao do defeito que `verificar:hidratacao` existe para caçar: HTML certo,
+JavaScript baixado, clique morto.
+
+Perdi meia investigação nisso. A sequência "conta A hidrata, conta B não" parecia
+provar que o recurso novo quebrava a página; invertendo a ordem, quem não
+hidratou foi a conta sem recurso nenhum. O fator era a ordem no navegador.
+
+Por isso o `verificar:hidratacao` sobe o Chrome com
+`--disable-backgrounding-occluded-windows`, `--disable-renderer-backgrounding` e
+`--disable-background-timer-throttling`. Prova causal: mesma sequência, mesma
+máquina, mudando só as flags — sem elas `visibilityState=hidden` e a página não
+hidrata; com elas `visible` e hidrata em ~300ms. **Em Chrome com janela, os
+mesmos passos hidratam sempre.** Nenhum usuário real foi atingido.
+
+Regra que fica: **antes de acusar o produto, confira `document.visibilityState`.**
+
+E o cenário virou rodada permanente: o checker agora sai da conta pelo mesmo
+botão do usuário (form POST para `/auth/sair`), entra de novo no mesmo navegador
+e reabre o editor. Se um dia quebrar de verdade, o editor fica morto e a pessoa
+acha que o app acabou — as outras rodadas não pegariam, porque cada uma nascia
+num navegador novo.
+
+Detalhe que travou o teste por dez minutos: **expressão que navega a página nunca
+devolve resultado ao CDP.** `Runtime.evaluate` com `awaitPromise` fica pendurado
+para sempre. Clique que submete formulário vai por `disparar` (sem await), e a
+rota é conferida do lado de fora, com `esperarRota`.
+
 ### Defeito que se repete vira verificador, não mais uma correção
 
 **Três ocorrências do mesmo defeito significam que vai haver uma quarta. Quando
